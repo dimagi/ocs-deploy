@@ -18,6 +18,10 @@ def requirements(c: Context, upgrade_all=False, upgrade_package=None):
     c.run(f"{cmd_base} {base_path}.in -o {base_path}.txt{args}", env=env)
     c.run(f"{cmd_base} {base_path}-dev.in -o {base_path}-dev.txt{args}", env=env)
 
+    if _confirm("\nInstall requirements ?", _exit=False):
+        cmd = "uv pip" if has_uv.ok else "pip"
+        c.run(f"{cmd} install -r requirements-dev.txt", echo=True, pty=True)
+
 
 @task
 def ruff(c: Context, no_fix=False, unsafe_fixes=False):
@@ -26,3 +30,11 @@ def ruff(c: Context, no_fix=False, unsafe_fixes=False):
     unsafe_fixes_flag = "--unsafe-fixes" if unsafe_fixes else ""
     c.run(f"ruff check {fix_flag} {unsafe_fixes_flag}", echo=True, pty=True)
     c.run("ruff format", echo=True, pty=True)
+
+
+def _confirm(message, _exit=True, exit_message="Done"):
+    response = input(f"{message} (y/n): ")
+    confirmed = response.lower() == "y"
+    if not confirmed and _exit:
+        raise Exit(exit_message, -1)
+    return confirmed

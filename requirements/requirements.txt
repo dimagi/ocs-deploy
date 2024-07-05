@@ -37,6 +37,8 @@ publication==0.0.3
     #   jsii
 python-dateutil==2.9.0.post0
     # via jsii
+python-dotenv==1.0.1
+    # via -r requirements/requirements.in
 six==1.16.0
     # via python-dateutil
 typeguard==2.13.3
