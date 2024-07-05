@@ -12,3 +12,5 @@ pytest==8.2.2
     # via -r requirements/requirements-dev.in
 ruff==0.5.0
     # via -r requirements/requirements-dev.in
+uv==0.2.21
+    # via -r requirements/requirements-dev.in

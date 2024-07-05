@@ -1,2 +1,1 @@
-aws-cdk-lib==2.147.3
-constructs>=10.0.0,<11.0.0
+-r requirements/requirements.txt

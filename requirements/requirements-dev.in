@@ -2,3 +2,4 @@
 pytest
 ruff
 invoke
+uv
