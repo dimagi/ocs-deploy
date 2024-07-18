@@ -21,8 +21,12 @@ ecr = EcrStack(app, config)
 rds = RdsStack(app, vpc.vpc, config)
 rds.add_dependency(vpc)
 
+redis = RdsStack(app, vpc.vpc, config)
+redis.add_dependency(vpc)
+
 ocs_services = FargateStack(app, vpc.vpc, ecr.repo, config)
 ocs_services.add_dependency(vpc)
 ocs_services.add_dependency(ecr)
+ocs_services.add_dependency(redis)
 
 app.synth()

@@ -11,6 +11,7 @@ class OCSConfig:
     ecr_repo_name: str
     rds_username: str
     rds_database_name: str
+    maintenance_window: str
 
     def __init__(self, config: dict = None):
         config = config.get if config else os.getenv
@@ -21,6 +22,7 @@ class OCSConfig:
         self.ecr_repo_name = config("ECR_REPO_NAME")
         self.rds_username = config("RDS_USERNAME")
         self.rds_database_name = config("RDS_DATABASE_NAME")
+        self.maintenance_window = config("MAINTENANCE_WINDOW", "Mon:00:00-Mon:03:00")
 
     def stack_name(self, name: str):
         return self.make_name(name, include_region=True)
@@ -37,3 +39,11 @@ class OCSConfig:
     @property
     def rds_url_secrets_name(self):
         return self.make_name("RdsDatabaseUrl")
+
+    @property
+    def redis_url_secrets_name(self):
+        return self.make_name("RedisUrl")
+
+    @property
+    def django_secret_key_secrets_name(self):
+        return self.make_name("DjangoSecretKey")

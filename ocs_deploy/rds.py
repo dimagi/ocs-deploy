@@ -21,7 +21,11 @@ class RdsStack(cdk.Stack):
 
     def setup_rds_database(self, vpc, config: OCSConfig):
         db_server_sg = ec2.SecurityGroup(
-            self, config.make_name("RdsSG"), vpc=vpc, allow_all_outbound=True
+            self,
+            config.make_name("RdsSG"),
+            security_group_name=config.make_name("RdsSG"),
+            vpc=vpc,
+            allow_all_outbound=True,
         )
         db_server_sg.add_ingress_rule(
             ec2.Peer.ipv4(vpc.vpc_cidr_block), ec2.Port.tcp(5432)
@@ -50,6 +54,7 @@ class RdsStack(cdk.Stack):
         rds_credentials = secretsmanager.Secret(
             self,
             config.make_name("RdsCredentials"),
+            secret_name=config.make_name("RdsCredentials"),
             generate_secret_string=secretsmanager.SecretStringGenerator(
                 secret_string_template=json.dumps({"username": config.rds_username}),
                 generate_string_key="password",
@@ -89,7 +94,7 @@ class RdsStack(cdk.Stack):
             deletion_protection=True,
             publicly_accessible=False,
             database_name=config.rds_database_name,
-            preferred_maintenance_window="Mon:00:00-Mon:03:00",
+            preferred_maintenance_window=config.maintenance_window,
             backup_retention=cdk.Duration.days(7),
             preferred_backup_window="03:00-06:00",
             cloudwatch_logs_exports=["postgresql", "upgrade"],
