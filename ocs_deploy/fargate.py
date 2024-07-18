@@ -4,6 +4,7 @@ from aws_cdk import (
     aws_ecs as ecs,
     aws_ecs_patterns as ecs_patterns,
     aws_iam as iam,
+    aws_secretsmanager as secretsmanager,
 )
 from constructs import Construct
 
@@ -80,6 +81,15 @@ class FargateStack(cdk.Stack):
         # create a task definition with CloudWatch Logs
         log_driver = ecs.AwsLogDriver(stream_prefix=config.make_name())
 
+        django_secret_key = secretsmanager.Secret(
+            self,
+            config.django_secret_key_secrets_name,
+            secret_name=config.django_secret_key_secrets_name,
+            generate_secret_string=secretsmanager.SecretStringGenerator(
+                password_length=50,
+            ),
+        )
+
         # Instantiate Fargate Service with just cluster and image
         fargate_service = ecs_patterns.ApplicationLoadBalancedFargateService(
             self,
@@ -93,9 +103,15 @@ class FargateStack(cdk.Stack):
                 environment={"ENV_VAR": "VALUE"},
                 enable_logging=True,
                 log_driver=log_driver,
-                # secrets={
-                # "SECRET_KEY": ecs.Secret.from_secrets_manager(config.make_name("DjangoSecretKey")),
-                # },
+                secrets={
+                    "DATABASE_URL": ecs.Secret.from_secrets_manager(
+                        config.rds_url_secrets_name
+                    ),
+                    "REDIS_URL": ecs.Secret.from_secrets_manager(
+                        config.redis_url_secrets_name
+                    ),
+                    "SECRET_KEY": django_secret_key,
+                },
             ),
             security_groups=[http_sg, https_sg],
             cpu=256,
