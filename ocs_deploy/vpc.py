@@ -2,6 +2,7 @@ import aws_cdk as cdk
 from aws_cdk import (
     NestedStack,
     aws_ec2 as ec2,
+    aws_logs as logs,
 )
 from constructs import Construct
 
@@ -55,4 +56,40 @@ class VpcStack(NestedStack):
         vpc.add_interface_endpoint(
             "EcrDockerEndpoint", service=ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER
         )
+
+        self._setup_flow_logs(config, vpc)
+
         return vpc
+
+    def _setup_flow_logs(self, config, vpc):
+        # VPC Flow Logs
+        vpc_flow_log_role = ec2.Role(
+            self,
+            config.make_name("RoleVpcFlowLogs"),
+            assumed_by=ec2.ServicePrincipal("vpc-flow-logs.amazonaws.com"),
+            managed_policies=[
+                ec2.ManagedPolicy.from_aws_managed_policy_name("CloudWatchFullAccess"),
+            ],
+        )
+        vpc_flow_log_group = ec2.LogGroup(
+            self,
+            config.make_name("VpcFlowLogGroup"),
+            retention=ec2.RetentionDays.ONE_MONTH,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+        )
+        # Create the VPC Flow Log Stream
+        logs.LogStream(
+            self,
+            config.make_name("VpcFlowLogStream"),
+            log_group=vpc_flow_log_group,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+        )
+        ec2.FlowLog(
+            self,
+            config.make_name("VpcFlowLog"),
+            resource_type=ec2.FlowLogResourceType.from_vpc(vpc),
+            destination=ec2.FlowLogDestination.to_cloud_watch_logs(
+                vpc_flow_log_group, vpc_flow_log_role
+            ),
+            traffic_type=ec2.FlowLogTrafficType.ALL,
+        )
