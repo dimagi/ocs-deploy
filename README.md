@@ -40,6 +40,8 @@ $ pip install -r requirements.txt
 At this point you can now synthesize the CloudFormation template for this code.
 
 ```
+$ export AWS_PROFILE=XXX
+$ aws sso login
 $ cdk synth
 ```
 

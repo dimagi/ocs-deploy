@@ -15,7 +15,10 @@ class EcrStack(NestedStack):
 
     def setup_ecr(self, config: OCSConfig):
         ecr_repo = ecr.Repository(
-            self, config.make_name("ECR"), repository_name=config.ecr_repo_name
+            self,
+            config.make_name("ECR"),
+            repository_name=config.ecr_repo_name,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
         )
         ecr_repo.add_lifecycle_rule(
             max_image_age=cdk.Duration.days(7),
