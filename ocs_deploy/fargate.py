@@ -112,7 +112,7 @@ class FargateStack(cdk.Stack):
                     "TERMS_URL": config.terms_url,
                     "SIGNUP_ENABLED": config.signup_enabled,
                     "SLACK_BOT_NAME": config.slack_bot_name,
-                    "USE_S3_STORAGE": config.use_s3_storage,
+                    "USE_S3_STORAGE": "True",
                     "WHATSAPP_S3_AUDIO_BUCKET": config.whatsapp_s3_audio_bucket,
                 },
                 enable_logging=True,

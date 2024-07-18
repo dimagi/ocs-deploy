@@ -8,9 +8,6 @@ class OCSConfig:
     app_name: str
     environment: str
     region: str
-    ecr_repo_name: str
-    rds_username: str
-    rds_database_name: str
     maintenance_window: str
 
     django_email_backend: str
@@ -26,9 +23,6 @@ class OCSConfig:
         self.app_name = config("APP_NAME", "open-chat-studio")
         self.environment = config("ENVIRONMENT", "dev")
         self.region = config("CDK_REGION")
-        self.ecr_repo_name = config("ECR_REPO_NAME")
-        self.rds_username = config("RDS_USERNAME")
-        self.rds_database_name = config("RDS_DATABASE_NAME")
         self.maintenance_window = config("MAINTENANCE_WINDOW", "Mon:00:00-Mon:03:00")
 
         self.azure_region = config("AZURE_REGION", "eastus")
@@ -37,8 +31,6 @@ class OCSConfig:
         self.terms_url = config("TERMS_URL")
         self.signup_enabled = config("SIGNUP_ENABLED")
         self.slack_bot_name = config("SLACK_BOT_NAME")
-        self.use_s3_storage = config("USE_S3_STORAGE", "True")
-        self.whatsapp_s3_audio_bucket = config("WHATSAPP_S3_AUDIO_BUCKET")
 
     def stack_name(self, name: str):
         return self.make_name(name, include_region=True)
@@ -53,6 +45,10 @@ class OCSConfig:
         return f"{self.app_name}-{self.environment}{name}"
 
     @property
+    def ecr_repo_name(self):
+        return self.make_name("EcrRepo")
+
+    @property
     def rds_url_secrets_name(self):
         return self.make_name("RdsDatabaseUrl")
 
@@ -64,6 +60,7 @@ class OCSConfig:
     def django_secret_key_secrets_name(self):
         return self.make_name("DjangoSecretKey")
 
+    # TODO: create buckets
     @property
     def s3_private_bucket_name(self):
         return self.make_name("PrivateBucket")
@@ -71,3 +68,7 @@ class OCSConfig:
     @property
     def s3_public_bucket_name(self):
         return self.make_name("PublicBucket")
+
+    @property
+    def whatsapp_s3_audio_bucket(self):
+        return self.make_name("WhatsappS3Audio")

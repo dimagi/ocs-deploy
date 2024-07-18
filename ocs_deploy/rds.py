@@ -51,18 +51,20 @@ class RdsStack(cdk.Stack):
         )
         rds_role.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
 
+        database_username = "ocs-db-user"
         rds_credentials = secretsmanager.Secret(
             self,
             config.make_name("RdsCredentials"),
             secret_name=config.make_name("RdsCredentials"),
             generate_secret_string=secretsmanager.SecretStringGenerator(
-                secret_string_template=json.dumps({"username": config.rds_username}),
+                secret_string_template=json.dumps({"username": database_username}),
                 generate_string_key="password",
                 exclude_characters="/@",
             ),
         )
 
         # define postgresql database
+        database_name = config.make_name("ocs-db")
         db_instance = rds.DatabaseInstance(
             self,
             config.make_name("PostgresRDS"),
@@ -93,7 +95,7 @@ class RdsStack(cdk.Stack):
             removal_policy=cdk.RemovalPolicy.RETAIN,
             deletion_protection=True,
             publicly_accessible=False,
-            database_name=config.rds_database_name,
+            database_name=database_name,
             preferred_maintenance_window=config.maintenance_window,
             backup_retention=cdk.Duration.days(7),
             preferred_backup_window="03:00-06:00",
@@ -104,11 +106,11 @@ class RdsStack(cdk.Stack):
                 "client_encoding": "UTF8",
             },
         )
-        db_instance.grant_connect(rds_role, config.rds_username)
+        db_instance.grant_connect(rds_role, database_username)
 
         hostname = db_instance.instance_endpoint.hostname
         port = db_instance.db_instance_endpoint_port
-        db_url = f"postgres://{config.rds_username}:{rds_credentials.secret_value_from_json('password').to_string()}@{hostname}:{port}/{config.rds_database_name}"
+        db_url = f"postgres://{database_username}:{rds_credentials.secret_value_from_json('password').to_string()}@{hostname}:{port}/{database_name}"
 
         secretsmanager.Secret(
             self,
