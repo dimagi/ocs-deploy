@@ -1,6 +1,5 @@
 import aws_cdk as cdk
 from aws_cdk import (
-    NestedStack,
     aws_ec2 as ec2,
     aws_ecs as ecs,
     aws_ecs_patterns as ecs_patterns,
@@ -11,7 +10,7 @@ from constructs import Construct
 from ocs_deploy.config import OCSConfig
 
 
-class FargateStack(NestedStack):
+class FargateStack(cdk.Stack):
     """
     Represents a CDK stack for deploying a Fargate service within a VPC.
      *
@@ -22,7 +21,8 @@ class FargateStack(NestedStack):
     """
 
     def __init__(self, scope: Construct, vpc, ecr_repo, config: OCSConfig) -> None:
-        super().__init__(scope, config.stack_name("FargateVpcDeployment"))
+        super().__init__(scope, config.stack_name("Fargate"), env=config.env())
+
         self.fargate_service = self.setup_fargate_service(vpc, ecr_repo, config)
 
     def setup_fargate_service(self, vpc, ecr_repo, config: OCSConfig):

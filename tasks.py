@@ -6,7 +6,7 @@ from ocs_deploy.config import OCSConfig
 
 @task(
     help={
-        "stack": "Name of the stack to deploy (infra | services)",
+        "stack": "Name of the stack to deploy (VPC | ECR | RDS | Fargate)",
         "verbose": "Enable verbose output",
     }
 )

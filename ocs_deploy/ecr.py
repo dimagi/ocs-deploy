@@ -1,6 +1,5 @@
 import aws_cdk as cdk
 from aws_cdk import (
-    NestedStack,
     aws_ecr as ecr,
 )
 from constructs import Construct
@@ -8,9 +7,9 @@ from constructs import Construct
 from ocs_deploy.config import OCSConfig
 
 
-class EcrStack(NestedStack):
+class EcrStack(cdk.Stack):
     def __init__(self, scope: Construct, config: OCSConfig) -> None:
-        super().__init__(scope, config.stack_name("ECR"))
+        super().__init__(scope, config.stack_name("ECR"), env=config.env())
         self.repo = self.setup_ecr(config)
 
     def setup_ecr(self, config: OCSConfig):

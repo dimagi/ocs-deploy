@@ -2,11 +2,10 @@ import json
 
 import aws_cdk as cdk
 from aws_cdk import (
-    NestedStack,
-    aws_rds as rds,
     aws_ec2 as ec2,
-    aws_logs as logs,
     aws_iam as iam,
+    aws_logs as logs,
+    aws_rds as rds,
     aws_secretsmanager as secretsmanager,
 )
 from constructs import Construct
@@ -14,9 +13,10 @@ from constructs import Construct
 from ocs_deploy.config import OCSConfig
 
 
-class RdsStack(NestedStack):
+class RdsStack(cdk.Stack):
     def __init__(self, scope: Construct, vpc, config: OCSConfig) -> None:
-        super().__init__(scope, config.stack_name("FargateVpcDeployment"))
+        super().__init__(scope, config.stack_name("RDS"), env=config.env())
+
         self.rds_database = self.setup_rds_database(vpc, config)
 
     def setup_rds_database(self, vpc, config: OCSConfig):

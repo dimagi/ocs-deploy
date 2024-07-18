@@ -1,18 +1,13 @@
 import aws_cdk as cdk
-from aws_cdk import (
-    NestedStack,
-    aws_iam as iam,
-    aws_ec2 as ec2,
-    aws_logs as logs,
-)
+from aws_cdk import aws_ec2 as ec2, aws_iam as iam, aws_logs as logs
 from constructs import Construct
 
 from ocs_deploy.config import OCSConfig
 
 
-class VpcStack(NestedStack):
+class VpcStack(cdk.Stack):
     def __init__(self, scope: Construct, config: OCSConfig) -> None:
-        super().__init__(scope, config.stack_name("VPC"))
+        super().__init__(scope, config.stack_name("VPC"), env=config.env())
         self.vpc = self.setup_vpc(config)
 
     def setup_vpc(self, config: OCSConfig):

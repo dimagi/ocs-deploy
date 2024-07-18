@@ -4,7 +4,10 @@ import aws_cdk as cdk
 from dotenv import load_dotenv
 
 from ocs_deploy.config import OCSConfig
-from ocs_deploy.stacks import OcsServicesStack, OcsInfraSetupStack
+from ocs_deploy.ecr import EcrStack
+from ocs_deploy.fargate import FargateStack
+from ocs_deploy.rds import RdsStack
+from ocs_deploy.vpc import VpcStack
 
 load_dotenv(".env")
 
@@ -12,9 +15,14 @@ config = OCSConfig()
 
 app = cdk.App()
 
-infra = OcsInfraSetupStack(app, config)
+vpc = VpcStack(app, config)
+ecr = EcrStack(app, config)
 
-ocs_services = OcsServicesStack(app, infra.vpc, infra.ecr_repo, config)
-ocs_services.add_dependency(infra)
+rds = RdsStack(app, vpc.vpc, config)
+rds.add_dependency(vpc)
+
+ocs_services = FargateStack(app, vpc.vpc, ecr.repo, config)
+ocs_services.add_dependency(vpc)
+ocs_services.add_dependency(ecr)
 
 app.synth()
