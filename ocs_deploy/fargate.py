@@ -100,7 +100,21 @@ class FargateStack(cdk.Stack):
                 container_name="web",
                 task_role=task_role,
                 container_port=container_port,
-                environment={"ENV_VAR": "VALUE"},
+                environment={
+                    "ACCOUNT_EMAIL_VERIFICATION": "mandatory",
+                    "AWS_PRIVATE_STORAGE_BUCKET_NAME": config.s3_private_bucket_name,
+                    "AWS_PUBLIC_STORAGE_BUCKET_NAME": config.s3_public_bucket_name,
+                    "AWS_S3_REGION": config.region,
+                    "AZURE_REGION": config.azure_region,
+                    "DJANGO_EMAIL_BACKEND": config.django_email_backend,
+                    "DJANGO_SETTINGS_MODULE": "gpt_playground.settings_production",
+                    "PRIVACY_POLICY_URL": config.privacy_policy_url,
+                    "TERMS_URL": config.terms_url,
+                    "SIGNUP_ENABLED": config.signup_enabled,
+                    "SLACK_BOT_NAME": config.slack_bot_name,
+                    "USE_S3_STORAGE": config.use_s3_storage,
+                    "WHATSAPP_S3_AUDIO_BUCKET": config.whatsapp_s3_audio_bucket,
+                },
                 enable_logging=True,
                 log_driver=log_driver,
                 secrets={
@@ -111,6 +125,21 @@ class FargateStack(cdk.Stack):
                         config.redis_url_secrets_name
                     ),
                     "SECRET_KEY": django_secret_key,
+                    # "AWS_SECRET_ACCESS_KEY": ecs.Secret.from_secrets_manager(TODO)
+                    # "AWS_SES_ACCESS_KEY": ecs.Secret.from_secrets_manager(TODO)
+                    # "AWS_SES_REGION": ecs.Secret.from_secrets_manager(TODO)
+                    # "AWS_SES_SECRET_KEY": ecs.Secret.from_secrets_manager(TODO)
+                    # "AZURE_SUBSCRIPTION_KEY": ecs.Secret.from_secrets_manager(TODO)
+                    # "CRYPTOGRAPHY_SALT": ecs.Secret.from_secrets_manager(TODO)
+                    # "OPENAI_API_KEY": ecs.Secret.from_secrets_manager(TODO)
+                    # "SENTRY_DSN": ecs.Secret.from_secrets_manager(TODO)
+                    # "SLACK_CLIENT_ID": ecs.Secret.from_secrets_manager(TODO)
+                    # "SLACK_CLIENT_SECRET": ecs.Secret.from_secrets_manager(TODO)
+                    # "SLACK_SIGNING_SECRET": ecs.Secret.from_secrets_manager(TODO)
+                    # "TASKBADGER_API_KEY": ecs.Secret.from_secrets_manager(TODO)
+                    # "TASKBADGER_ORG": ecs.Secret.from_secrets_manager(TODO)
+                    # "TASKBADGER_PROJECT": ecs.Secret.from_secrets_manager(TODO)
+                    # "TELEGRAM_SECRET_TOKEN": ecs.Secret.from_secrets_manager(TODO)
                 },
             ),
             security_groups=[http_sg, https_sg],

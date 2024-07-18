@@ -13,6 +13,13 @@ class OCSConfig:
     rds_database_name: str
     maintenance_window: str
 
+    django_email_backend: str
+    azure_region: str
+    privacy_policy_url: str
+    terms_url: str
+    signup_enabled: str
+    slack_bot_name: str
+
     def __init__(self, config: dict = None):
         config = config.get if config else os.getenv
         self.account = config("CDK_ACCOUNT")
@@ -23,6 +30,15 @@ class OCSConfig:
         self.rds_username = config("RDS_USERNAME")
         self.rds_database_name = config("RDS_DATABASE_NAME")
         self.maintenance_window = config("MAINTENANCE_WINDOW", "Mon:00:00-Mon:03:00")
+
+        self.azure_region = config("AZURE_REGION", "eastus")
+        self.django_email_backend = config("DJANGO_EMAIL_BACKEND")
+        self.privacy_policy_url = config("PRIVACY_POLICY_URL")
+        self.terms_url = config("TERMS_URL")
+        self.signup_enabled = config("SIGNUP_ENABLED")
+        self.slack_bot_name = config("SLACK_BOT_NAME")
+        self.use_s3_storage = config("USE_S3_STORAGE", "True")
+        self.whatsapp_s3_audio_bucket = config("WHATSAPP_S3_AUDIO_BUCKET")
 
     def stack_name(self, name: str):
         return self.make_name(name, include_region=True)
@@ -47,3 +63,11 @@ class OCSConfig:
     @property
     def django_secret_key_secrets_name(self):
         return self.make_name("DjangoSecretKey")
+
+    @property
+    def s3_private_bucket_name(self):
+        return self.make_name("PrivateBucket")
+
+    @property
+    def s3_public_bucket_name(self):
+        return self.make_name("PublicBucket")
