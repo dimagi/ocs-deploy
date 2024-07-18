@@ -5,6 +5,7 @@ from constructs import Construct
 
 from ocs_deploy.ecr import EcrStack
 from ocs_deploy.fargate import FargateStack
+from ocs_deploy.rds import RdsStack
 from ocs_deploy.vpc import VpcStack
 
 from ocs_deploy.config import OCSConfig
@@ -16,6 +17,9 @@ class OcsInfraSetupStack(Stack):
 
         self.ecr_repo = EcrStack(self, config).repo
         self.vpc = VpcStack(self, config).vpc
+
+        self.db_instance = RdsStack(self, self.vpc, config)
+        self.db_instance.add_dependency(self.vpc)
 
 
 class OcsServicesStack(Stack):

@@ -4,7 +4,7 @@ import aws_cdk as cdk
 from dotenv import load_dotenv
 
 from ocs_deploy.config import OCSConfig
-from ocs_deploy.ocs_deploy_stack import OcsServicesStack, OcsInfraSetupStack
+from ocs_deploy.stacks import OcsServicesStack, OcsInfraSetupStack
 
 load_dotenv(".env")
 
