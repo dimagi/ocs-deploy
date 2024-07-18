@@ -125,6 +125,7 @@ class FargateStack(cdk.Stack):
                         config.redis_url_secrets_name
                     ),
                     "SECRET_KEY": django_secret_key,
+                    # can we remove these aws access keys and use IAM roles?
                     # "AWS_SECRET_ACCESS_KEY": ecs.Secret.from_secrets_manager(TODO)
                     # "AWS_SES_ACCESS_KEY": ecs.Secret.from_secrets_manager(TODO)
                     # "AWS_SES_REGION": ecs.Secret.from_secrets_manager(TODO)
