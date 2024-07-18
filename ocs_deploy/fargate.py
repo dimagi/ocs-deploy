@@ -93,6 +93,9 @@ class FargateStack(NestedStack):
                 environment={"ENV_VAR": "VALUE"},
                 enable_logging=True,
                 log_driver=log_driver,
+                # secrets={
+                # "SECRET_KEY": ecs.Secret.from_secrets_manager(config.make_name("DjangoSecretKey")),
+                # },
             ),
             security_groups=[http_sg, https_sg],
             cpu=256,

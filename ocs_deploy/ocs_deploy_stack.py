@@ -10,11 +10,15 @@ from ocs_deploy.vpc import VpcStack
 from ocs_deploy.config import OCSConfig
 
 
-class OcsDeployStack(Stack):
+class OcsInfraSetupStack(Stack):
     def __init__(self, scope: Construct, config: OCSConfig) -> None:
-        super().__init__(scope, config.stack_name("OCSDeployStack"), env=config.env())
+        super().__init__(scope, config.stack_name("infra"), env=config.env())
 
-        ecr_stack = EcrStack(self, config)
-        vpc_stack = VpcStack(self, config)
+        self.ecr_repo = EcrStack(self, config).repo
+        self.vpc = VpcStack(self, config).vpc
 
-        FargateStack(self, vpc_stack.vpc, ecr_stack.repo, config)
+
+class OcsServicesStack(Stack):
+    def __init__(self, scope: Construct, vpc, ecr_repo, config: OCSConfig) -> None:
+        super().__init__(scope, config.stack_name("services"), env=config.env())
+        self.fargate_service = FargateStack(self, vpc, ecr_repo, config)

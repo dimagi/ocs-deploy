@@ -1,6 +1,7 @@
 import aws_cdk as cdk
 from aws_cdk import (
     NestedStack,
+    aws_iam as iam,
     aws_ec2 as ec2,
     aws_logs as logs,
 )
@@ -63,18 +64,18 @@ class VpcStack(NestedStack):
 
     def _setup_flow_logs(self, config, vpc):
         # VPC Flow Logs
-        vpc_flow_log_role = ec2.Role(
+        vpc_flow_log_role = iam.Role(
             self,
             config.make_name("RoleVpcFlowLogs"),
-            assumed_by=ec2.ServicePrincipal("vpc-flow-logs.amazonaws.com"),
+            assumed_by=iam.ServicePrincipal("vpc-flow-logs.amazonaws.com"),
             managed_policies=[
-                ec2.ManagedPolicy.from_aws_managed_policy_name("CloudWatchFullAccess"),
+                iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchFullAccess"),
             ],
         )
-        vpc_flow_log_group = ec2.LogGroup(
+        vpc_flow_log_group = logs.LogGroup(
             self,
             config.make_name("VpcFlowLogGroup"),
-            retention=ec2.RetentionDays.ONE_MONTH,
+            retention=logs.RetentionDays.ONE_MONTH,
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
         # Create the VPC Flow Log Stream
