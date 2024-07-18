@@ -87,6 +87,7 @@ class FargateStack(NestedStack):
             cluster=cluster,
             task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
                 image=ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest"),
+                container_name="web",
                 task_role=task_role,
                 container_port=container_port,
                 environment={"ENV_VAR": "VALUE"},
@@ -99,6 +100,7 @@ class FargateStack(NestedStack):
             desired_count=1,
             public_load_balancer=True,
             load_balancer_name=config.make_name("LoadBalancer"),
+            service_name=config.make_name("Django"),
             # // certificate: acm.Certificate.fromCertificateArn(this, `${props.appName}-${props.environment}-FargateServiceCertificate`, props.certificateArn),
             # // certificate,
             # // redirectHTTP: true,
