@@ -1,4 +1,23 @@
+from dotenv import dotenv_values
 from invoke import Context, Exit, task
+
+from ocs_deploy.config import OCSConfig
+
+
+@task(
+    help={
+        "stack": "Name of the stack to deploy (infra | services)",
+        "verbose": "Enable verbose output",
+    }
+)
+def deploy(c: Context, stack=None, verbose=False):
+    config = OCSConfig(dotenv_values(".env"))
+    cmd = "cdk deploy"
+    if stack:
+        cmd += f" {config.stack_name(stack)}"
+    if verbose:
+        cmd += " --verbose"
+    c.run(cmd, echo=True, pty=True)
 
 
 @task

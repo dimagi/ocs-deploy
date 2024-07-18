@@ -10,12 +10,13 @@ class OCSConfig:
     region: str
     ecr_repo_name: str
 
-    def __init__(self):
-        self.account = os.getenv("CDK_ACCOUNT")
-        self.app_name = os.getenv("APP_NAME", "open-chat-studio")
-        self.environment = os.getenv("ENVIRONMENT", "dev")
-        self.region = os.getenv("CDK_REGION")
-        self.ecr_repo_name = os.getenv("ECR_REPO_NAME")
+    def __init__(self, config: dict = None):
+        config = config.get if config else os.getenv
+        self.account = config("CDK_ACCOUNT")
+        self.app_name = config("APP_NAME", "open-chat-studio")
+        self.environment = config("ENVIRONMENT", "dev")
+        self.region = config("CDK_REGION")
+        self.ecr_repo_name = config("ECR_REPO_NAME")
 
     def stack_name(self, name: str):
         return self.make_name(name, include_region=True)
