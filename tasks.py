@@ -21,7 +21,7 @@ def _check_credentials(c: Context, profile: str):
 
 @task(
     help={
-        "stack": "Name of the stack to deploy (vpc | ecr | rds | redis | django)",
+        "stack": f"Name of the stack to deploy ({' | '.join(OCSConfig.ALL_STACKS)})",
         "verbose": "Enable verbose output",
     }
 )

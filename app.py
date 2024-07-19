@@ -16,18 +16,21 @@ config = OCSConfig()
 
 app = cdk.App()
 
-vpc = VpcStack(app, config)
-ecr = EcrStack(app, config)
+vpc_stack = VpcStack(app, config)
+ecr_stack = EcrStack(app, config)
 
-rds = RdsStack(app, vpc.vpc, config)
-rds.add_dependency(vpc)
+rds_stack = RdsStack(app, vpc_stack.vpc, config)
+rds_stack.add_dependency(vpc_stack)
 
-redis = RedisStack(app, vpc.vpc, config)
-redis.add_dependency(vpc)
+redis_stack = RedisStack(app, vpc_stack.vpc, config)
+redis_stack.add_dependency(vpc_stack)
 
-ocs_services = FargateStack(app, vpc.vpc, ecr.repo, config)
-ocs_services.add_dependency(vpc)
-ocs_services.add_dependency(ecr)
-ocs_services.add_dependency(redis)
+ocs_services = FargateStack(
+    app, vpc_stack.vpc, ecr_stack.repo, rds_stack, redis_stack, config
+)
+ocs_services.add_dependency(vpc_stack)
+ocs_services.add_dependency(ecr_stack)
+ocs_services.add_dependency(rds_stack)
+ocs_services.add_dependency(redis_stack)
 
 app.synth()

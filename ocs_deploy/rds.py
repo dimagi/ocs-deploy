@@ -4,7 +4,6 @@ from aws_cdk import (
     aws_iam as iam,
     aws_logs as logs,
     aws_rds as rds,
-    aws_secretsmanager as secretsmanager,
 )
 from constructs import Construct
 
@@ -13,9 +12,11 @@ from ocs_deploy.config import OCSConfig
 
 class RdsStack(cdk.Stack):
     def __init__(self, scope: Construct, vpc, config: OCSConfig) -> None:
-        super().__init__(scope, config.stack_name("rds"), env=config.env())
+        super().__init__(
+            scope, config.stack_name(OCSConfig.RDS_STACK), env=config.env()
+        )
 
-        self.rds_database = self.setup_rds_database(vpc, config)
+        self.db_instance = self.setup_rds_database(vpc, config)
 
     def setup_rds_database(self, vpc, config: OCSConfig):
         db_server_sg = ec2.SecurityGroup(
@@ -52,7 +53,6 @@ class RdsStack(cdk.Stack):
         database_username = "ocs-db-user"
 
         # define postgresql database
-        database_name = config.make_name("ocs-db")
         db_instance = rds.DatabaseInstance(
             self,
             config.make_name("PostgresRDS"),
@@ -81,7 +81,7 @@ class RdsStack(cdk.Stack):
             removal_policy=cdk.RemovalPolicy.RETAIN,
             deletion_protection=True,
             publicly_accessible=False,
-            database_name=database_name,
+            database_name=config.rds_db_name,
             preferred_maintenance_window=config.maintenance_window,
             backup_retention=cdk.Duration.days(7),
             preferred_backup_window="03:00-06:00",
@@ -96,15 +96,6 @@ class RdsStack(cdk.Stack):
 
         hostname = db_instance.instance_endpoint.hostname
         port = db_instance.db_instance_endpoint_port
-        password = db_instance.secret.secret_value_from_json("password").to_string()
-        db_url = f"postgres://{database_username}:{password}@{hostname}:{port}/{database_name}"
-
-        secretsmanager.Secret(
-            self,
-            config.rds_url_secrets_name,
-            secret_name=config.rds_url_secrets_name,
-            secret_string_value=cdk.SecretValue.unsafe_plain_text(db_url),
-        )
 
         cdk.CfnOutput(
             self,

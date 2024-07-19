@@ -21,12 +21,20 @@ class FargateStack(cdk.Stack):
      * The stack also configures auto-scaling for the Fargate service based on CPU utilization.
     """
 
-    def __init__(self, scope: Construct, vpc, ecr_repo, config: OCSConfig) -> None:
-        super().__init__(scope, config.stack_name("django"), env=config.env())
+    def __init__(
+        self, scope: Construct, vpc, ecr_repo, rds_stack, redis_stack, config: OCSConfig
+    ) -> None:
+        super().__init__(
+            scope, config.stack_name(OCSConfig.DJANGO_STACK), env=config.env()
+        )
 
-        self.fargate_service = self.setup_fargate_service(vpc, ecr_repo, config)
+        self.fargate_service = self.setup_fargate_service(
+            vpc, ecr_repo, rds_stack, redis_stack, config
+        )
 
-    def setup_fargate_service(self, vpc, ecr_repo, config: OCSConfig):
+    def setup_fargate_service(
+        self, vpc, ecr_repo, rds_stack, redis_stack, config: OCSConfig
+    ):
         http_sg = ec2.SecurityGroup(
             self, config.make_name("HttpSG"), vpc=vpc, allow_all_outbound=True
         )
@@ -106,6 +114,9 @@ class FargateStack(cdk.Stack):
                     "AWS_PUBLIC_STORAGE_BUCKET_NAME": config.s3_public_bucket_name,
                     "AWS_S3_REGION": config.region,
                     "AZURE_REGION": config.azure_region,
+                    "DJANGO_DATABASE_NAME": config.rds_db_name,
+                    "DJANGO_DATABASE_HOST": rds_stack.db_instance.instance_endpoint.hostname,
+                    "DJANGO_DATABASE_PORT": rds_stack.db_instance.db_instance_endpoint_port,
                     "DJANGO_EMAIL_BACKEND": config.django_email_backend,
                     "DJANGO_SETTINGS_MODULE": "gpt_playground.settings_production",
                     "PRIVACY_POLICY_URL": config.privacy_policy_url,
@@ -118,16 +129,19 @@ class FargateStack(cdk.Stack):
                 enable_logging=True,
                 log_driver=log_driver,
                 secrets={
-                    "DATABASE_URL": ecs.Secret.from_secrets_manager(
-                        secretsmanager.Secret.from_secret_name_v2(
-                            config.rds_url_secrets_name
-                        )
+                    "DJANGO_DATABASE_USERNAME": ecs.Secret.from_secrets_manager(
+                        rds_stack.db_instance.secret, field="username"
                     ),
-                    "REDIS_URL": ecs.Secret.from_secrets_manager(
-                        secretsmanager.Secret.from_secret_name_v2(
-                            config.redis_url_secrets_name
-                        )
+                    "DJANGO_DATABASE_PASSWORD": ecs.Secret.from_secrets_manager(
+                        rds_stack.db_instance.secret, field="password"
                     ),
+                    # "REDIS_URL": ecs.Secret.from_secrets_manager(
+                    #     secretsmanager.Secret.from_secret_name_v2(
+                    #         self,
+                    #         id=config.redis_url_secrets_name,
+                    #         secret_name=config.redis_url_secrets_name,
+                    #     )
+                    # ),
                     "SECRET_KEY": ecs.Secret.from_secrets_manager(django_secret_key),
                     # can we remove these aws access keys and use IAM roles?
                     # "AWS_SECRET_ACCESS_KEY": ecs.Secret.from_secrets_manager(TODO)
