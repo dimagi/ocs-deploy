@@ -1,5 +1,3 @@
-import json
-
 import aws_cdk as cdk
 from aws_cdk import (
     aws_ec2 as ec2,
@@ -52,16 +50,6 @@ class RdsStack(cdk.Stack):
         rds_role.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
 
         database_username = "ocs-db-user"
-        rds_credentials = secretsmanager.Secret(
-            self,
-            config.make_name("RdsCredentials"),
-            secret_name=config.make_name("RdsCredentials"),
-            generate_secret_string=secretsmanager.SecretStringGenerator(
-                secret_string_template=json.dumps({"username": database_username}),
-                generate_string_key="password",
-                exclude_characters="/@",
-            ),
-        )
 
         # define postgresql database
         database_name = config.make_name("ocs-db")
@@ -78,12 +66,10 @@ class RdsStack(cdk.Stack):
             allocated_storage=20,
             max_allocated_storage=100,
             storage_encrypted=True,
-            credentials={
-                "username": rds_credentials.secret_value_from_json(
-                    "username"
-                ).to_string(),
-                "password": rds_credentials.secret_value_from_json("password"),
-            },
+            credentials=rds.Credentials.from_generated_secret(
+                database_username,
+                secret_name=config.make_name("RdsCredentials"),
+            ),
             vpc=vpc,
             vpc_subnets=ec2.SubnetSelection(
                 subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
@@ -110,7 +96,8 @@ class RdsStack(cdk.Stack):
 
         hostname = db_instance.instance_endpoint.hostname
         port = db_instance.db_instance_endpoint_port
-        db_url = f"postgres://{database_username}:{rds_credentials.secret_value_from_json('password').to_string()}@{hostname}:{port}/{database_name}"
+        password = db_instance.secret.secret_value_from_json("password").to_string()
+        db_url = f"postgres://{database_username}:{password}@{hostname}:{port}/{database_name}"
 
         secretsmanager.Secret(
             self,
