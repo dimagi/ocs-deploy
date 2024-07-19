@@ -3,6 +3,21 @@ from invoke import Context, Exit, task
 
 from ocs_deploy.config import OCSConfig
 
+DEFAULT_PROFILE = "ocs-test"
+
+
+@task
+def login(c: Context, profile=DEFAULT_PROFILE):
+    result = c.run(f"aws sso login --profile {profile}", echo=True)
+    return result.ok
+
+
+def _check_credentials(c: Context, profile: str):
+    result = c.run(
+        f"aws sts get-caller-identity --profile {profile}", warn=True, hide=True
+    )
+    return result.ok
+
 
 @task(
     help={
@@ -10,9 +25,13 @@ from ocs_deploy.config import OCSConfig
         "verbose": "Enable verbose output",
     }
 )
-def deploy(c: Context, stack=None, verbose=False):
+def deploy(c: Context, stack=None, verbose=False, profile=DEFAULT_PROFILE):
+    if not _check_credentials(c, profile):
+        if not login(c, profile):
+            raise Exit("Failed to login", -1)
+
     config = OCSConfig(dotenv_values(".env"))
-    cmd = "cdk deploy"
+    cmd = f"cdk deploy --profile {profile}"
     if stack:
         cmd += f" {config.stack_name(stack)}"
     if verbose:
