@@ -119,12 +119,16 @@ class FargateStack(cdk.Stack):
                 log_driver=log_driver,
                 secrets={
                     "DATABASE_URL": ecs.Secret.from_secrets_manager(
-                        config.rds_url_secrets_name
+                        secretsmanager.Secret.from_secret_name_v2(
+                            config.rds_url_secrets_name
+                        )
                     ),
                     "REDIS_URL": ecs.Secret.from_secrets_manager(
-                        config.redis_url_secrets_name
+                        secretsmanager.Secret.from_secret_name_v2(
+                            config.redis_url_secrets_name
+                        )
                     ),
-                    "SECRET_KEY": django_secret_key,
+                    "SECRET_KEY": ecs.Secret.from_secrets_manager(django_secret_key),
                     # can we remove these aws access keys and use IAM roles?
                     # "AWS_SECRET_ACCESS_KEY": ecs.Secret.from_secrets_manager(TODO)
                     # "AWS_SES_ACCESS_KEY": ecs.Secret.from_secrets_manager(TODO)

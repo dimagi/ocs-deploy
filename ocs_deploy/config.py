@@ -1,4 +1,5 @@
 import os
+import re
 
 import aws_cdk as cdk
 
@@ -33,7 +34,7 @@ class OCSConfig:
         self.slack_bot_name = config("SLACK_BOT_NAME")
 
     def stack_name(self, name: str):
-        return self.make_name(name, include_region=True)
+        return self.make_name(f"{name}-stack", include_region=True)
 
     def env(self):
         return cdk.Environment(account=os.getenv("CDK_ACCOUNT"), region=self.region)
@@ -44,21 +45,29 @@ class OCSConfig:
             return f"{self.app_name}-{self.environment}-{self.region}{name}"
         return f"{self.app_name}-{self.environment}{name}"
 
+    def make_secret_name(self, name: str):
+        if re.match(r"-[a-zA-Z]{6}$", name):
+            raise Exception(
+                "Secret name should not end with a hyphen and 6 characters."
+                "See https://docs.aws.amazon.com/secretsmanager/latest/userguide/troubleshoot.html#ARN_secretnamehyphen"
+            )
+        return f"{self.app_name}/{self.environment}/{name}"
+
     @property
     def ecr_repo_name(self):
         return self.make_name("ecr-repo")
 
     @property
     def rds_url_secrets_name(self):
-        return self.make_name("rds-db-url")
+        return self.make_secret_name("rds-db-url")
 
     @property
     def redis_url_secrets_name(self):
-        return self.make_name("redis-url")
+        return self.make_secret_name("redis-url")
 
     @property
     def django_secret_key_secrets_name(self):
-        return self.make_name("django-secret-key")
+        return self.make_secret_name("django-secret-key")
 
     # TODO: create buckets
     @property
