@@ -22,7 +22,7 @@ class FargateStack(cdk.Stack):
     """
 
     def __init__(self, scope: Construct, vpc, ecr_repo, config: OCSConfig) -> None:
-        super().__init__(scope, config.stack_name("Fargate"), env=config.env())
+        super().__init__(scope, config.stack_name("django"), env=config.env())
 
         self.fargate_service = self.setup_fargate_service(vpc, ecr_repo, config)
 
