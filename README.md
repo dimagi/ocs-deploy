@@ -58,3 +58,43 @@ command.
  * `cdk docs`        open CDK documentation
 
 Enjoy!
+
+## First time deploy steps
+
+Assumptions:
+
+* You have an AWS Account with the necessary permissions and SSO configured
+* `export AWS_PROFILE=XXX` is set
+* SSO credentials are set up (`aws sso login`)
+
+Steps:
+
+1. Set up the ECR repository
+
+    ```shell
+    inv deploy -s ecr -v
+    ```
+
+    Now push the initial version of the Docker image to the registry. This is needed to create the ECS service.
+    See https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html
+       
+2. Set up RDS, Redis, S3
+
+    ```shell
+    inv deploy -s rds,redis,s3 -v
+    ```
+   
+3. Set up the domains
+
+    ```shell
+    inv deploy -s domains -v
+    ```
+
+   * Create the DNS entries for the domain and email domain verification
+   * The CNAME records will be included in the stack
+
+4. Set up the Django service
+
+    ```shell
+    inv deploy -s djangp -v
+    ```

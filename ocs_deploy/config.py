@@ -5,6 +5,7 @@ import aws_cdk as cdk
 
 
 class OCSConfig:
+    DOMAINS_STACK = "domains"
     S3_STACK = "s3"
     VPC_STACK = "vpc"
     ECR_STACK = "ecr"
@@ -13,6 +14,7 @@ class OCSConfig:
     DJANGO_STACK = "django"
 
     ALL_STACKS = [
+        DOMAINS_STACK,
         S3_STACK,
         VPC_STACK,
         ECR_STACK,
@@ -27,6 +29,8 @@ class OCSConfig:
         self.region = config["CDK_REGION"]
 
         self.django_email_backend = config["DJANGO_EMAIL_BACKEND"]
+        self.email_domain = config["EMAIL_DOMAIN"]
+        self.domain_name = config["DOMAIN_NAME"]
 
         self.app_name = config.get("APP_NAME", "ocs")
         self.environment = config.get("ENVIRONMENT", "dev")

@@ -1,9 +1,11 @@
+import os
+
 from dotenv import dotenv_values
 from invoke import Context, Exit, task
 
 from ocs_deploy.config import OCSConfig
 
-DEFAULT_PROFILE = "ocs-test"
+DEFAULT_PROFILE = os.environ.get("AWS_PROFILE", "ocs-test")
 
 
 @task
@@ -21,19 +23,20 @@ def _check_credentials(c: Context, profile: str):
 
 @task(
     help={
-        "stack": f"Name of the stack to deploy ({' | '.join(OCSConfig.ALL_STACKS)})",
+        "stacks": f"Comma-separated list of the stacks to deploy ({' | '.join(OCSConfig.ALL_STACKS)})",
         "verbose": "Enable verbose output",
     }
 )
-def deploy(c: Context, stack=None, verbose=False, profile=DEFAULT_PROFILE):
+def deploy(c: Context, stacks=None, verbose=False, profile=DEFAULT_PROFILE):
     if not _check_credentials(c, profile):
         if not login(c, profile):
             raise Exit("Failed to login", -1)
 
     config = OCSConfig(dotenv_values(".env"))
     cmd = f"cdk deploy --profile {profile}"
-    if stack:
-        cmd += f" {config.stack_name(stack)}"
+    if stacks:
+        stacks = " ".join([config.stack_name(stack) for stack in stacks.split(",")])
+        cmd += f" {stacks}"
     if verbose:
         cmd += " --verbose"
     c.run(cmd, echo=True, pty=True)
