@@ -94,16 +94,7 @@ class RdsStack(cdk.Stack):
         )
         db_instance.grant_connect(rds_role, database_username)
 
-        hostname = db_instance.instance_endpoint.hostname
         port = db_instance.db_instance_endpoint_port
-
-        cdk.CfnOutput(
-            self,
-            config.make_name("PostgresDatabaseInstanceHostname"),
-            export_name=config.make_name("PostgresDatabaseInstanceHostname"),
-            value=hostname,
-            description="PostgreSQL database instance hostname.",
-        )
 
         cdk.CfnOutput(
             self,
