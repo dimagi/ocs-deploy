@@ -1,6 +1,7 @@
 import aws_cdk as cdk
 from aws_cdk import (
     aws_ec2 as ec2,
+    aws_logs as logs,
     aws_elasticache as elasticache,
     aws_secretsmanager as secretsmanager,
 )
@@ -40,6 +41,13 @@ class RedisStack(cdk.Stack):
             description=config.make_name("RedisSubnetGroup"),
         )
 
+        engine_log_group = self.create_cloudwatch_log_group(
+            config.make_name("RedisEngineLogs")
+        )
+        slow_log_group = self.create_cloudwatch_log_group(
+            config.make_name("RedisSlowLogs")
+        )
+
         redis_cluster = elasticache.CfnCacheCluster(
             scope=self,
             id=config.make_name("RedisCluster"),
@@ -47,16 +55,17 @@ class RedisStack(cdk.Stack):
             engine="redis",
             engine_version="7.1",
             cache_node_type="cache.t3.small",
-            num_cache_nodes=2,
+            num_cache_nodes=1,
             cache_subnet_group_name=redis_subnet_group.ref,
             vpc_security_group_ids=[redis_sec_group.security_group_id],
             auto_minor_version_upgrade=True,
             preferred_maintenance_window=config.maintenance_window,
             log_delivery_configurations=[
+                # TODO: create log groups
                 elasticache.CfnCacheCluster.LogDeliveryConfigurationRequestProperty(
                     destination_details=elasticache.CfnCacheCluster.DestinationDetailsProperty(
                         cloud_watch_logs_details=elasticache.CfnCacheCluster.CloudWatchLogsDestinationDetailsProperty(
-                            log_group=config.make_name("RedisEngineLogs"),
+                            log_group=engine_log_group.log_group_name,
                         ),
                     ),
                     destination_type="cloudwatch-logs",
@@ -66,7 +75,7 @@ class RedisStack(cdk.Stack):
                 elasticache.CfnCacheCluster.LogDeliveryConfigurationRequestProperty(
                     destination_details=elasticache.CfnCacheCluster.DestinationDetailsProperty(
                         cloud_watch_logs_details=elasticache.CfnCacheCluster.CloudWatchLogsDestinationDetailsProperty(
-                            log_group=config.make_name("RedisSlowLogs"),
+                            log_group=slow_log_group.log_group_name,
                         ),
                     ),
                     destination_type="cloudwatch-logs",
@@ -86,3 +95,12 @@ class RedisStack(cdk.Stack):
         )
 
         return redis_cluster
+
+    def create_cloudwatch_log_group(self, name):
+        return logs.LogGroup(
+            self,
+            name,
+            log_group_name=name,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+            retention=logs.RetentionDays.ONE_MONTH,
+        )
