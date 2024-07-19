@@ -7,6 +7,7 @@ from ocs_deploy.config import OCSConfig
 from ocs_deploy.ecr import EcrStack
 from ocs_deploy.fargate import FargateStack
 from ocs_deploy.rds import RdsStack
+from ocs_deploy.redis import RedisStack
 from ocs_deploy.vpc import VpcStack
 
 load_dotenv(".env")
@@ -21,7 +22,7 @@ ecr = EcrStack(app, config)
 rds = RdsStack(app, vpc.vpc, config)
 rds.add_dependency(vpc)
 
-redis = RdsStack(app, vpc.vpc, config)
+redis = RedisStack(app, vpc.vpc, config)
 redis.add_dependency(vpc)
 
 ocs_services = FargateStack(app, vpc.vpc, ecr.repo, config)

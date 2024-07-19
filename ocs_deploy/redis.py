@@ -9,7 +9,7 @@ from constructs import Construct
 from ocs_deploy.config import OCSConfig
 
 
-class RdsStack(cdk.Stack):
+class RedisStack(cdk.Stack):
     def __init__(self, scope: Construct, vpc, config: OCSConfig) -> None:
         super().__init__(scope, config.stack_name("redis"), env=config.env())
 
