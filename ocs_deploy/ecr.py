@@ -34,6 +34,6 @@ class EcrStack(cdk.Stack):
             self, config.make_name("ECRRepositoryArn"), value=ecr_repo.repository_arn
         )
         cdk.CfnOutput(
-            self, config.make_name("ECRRepositoryName"), value=ecr_repo.repository_name
+            self, config.make_name("ECRRepositoryUri"), value=ecr_repo.repository_uri
         )
         return ecr_repo
