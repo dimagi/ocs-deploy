@@ -8,6 +8,7 @@ from ocs_deploy.ecr import EcrStack
 from ocs_deploy.fargate import FargateStack
 from ocs_deploy.rds import RdsStack
 from ocs_deploy.redis import RedisStack
+from ocs_deploy.s3 import S3Stack
 from ocs_deploy.vpc import VpcStack
 
 load_dotenv(".env")
@@ -15,6 +16,8 @@ load_dotenv(".env")
 config = OCSConfig()
 
 app = cdk.App()
+
+S3Stack(app, config)
 
 vpc_stack = VpcStack(app, config)
 ecr_stack = EcrStack(app, config)

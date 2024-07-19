@@ -5,6 +5,7 @@ import aws_cdk as cdk
 
 
 class OCSConfig:
+    S3_STACK = "s3"
     VPC_STACK = "vpc"
     ECR_STACK = "ecr"
     RDS_STACK = "rds"
@@ -12,6 +13,7 @@ class OCSConfig:
     DJANGO_STACK = "django"
 
     ALL_STACKS = [
+        S3_STACK,
         VPC_STACK,
         ECR_STACK,
         RDS_STACK,
@@ -96,5 +98,5 @@ class OCSConfig:
         return self.make_name("s3-public")
 
     @property
-    def whatsapp_s3_audio_bucket(self):
+    def s3_whatsapp_audio_bucket(self):
         return self.make_name("s3-whatsapp-audio")
