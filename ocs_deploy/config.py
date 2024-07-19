@@ -46,29 +46,29 @@ class OCSConfig:
 
     @property
     def ecr_repo_name(self):
-        return self.make_name("EcrRepo")
+        return self.make_name("ecr-repo")
 
     @property
     def rds_url_secrets_name(self):
-        return self.make_name("RdsDatabaseUrl")
+        return self.make_name("rds-db-url")
 
     @property
     def redis_url_secrets_name(self):
-        return self.make_name("RedisUrl")
+        return self.make_name("redis-url")
 
     @property
     def django_secret_key_secrets_name(self):
-        return self.make_name("DjangoSecretKey")
+        return self.make_name("django-secret-key")
 
     # TODO: create buckets
     @property
     def s3_private_bucket_name(self):
-        return self.make_name("PrivateBucket")
+        return self.make_name("s3-private")
 
     @property
     def s3_public_bucket_name(self):
-        return self.make_name("PublicBucket")
+        return self.make_name("s3-public")
 
     @property
     def whatsapp_s3_audio_bucket(self):
-        return self.make_name("WhatsappS3Audio")
+        return self.make_name("s3-whatsapp-audio")
