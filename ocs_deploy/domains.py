@@ -23,6 +23,7 @@ class DomainStack(cdk.Stack):
         acm.Certificate(
             self,
             config.make_name("Certificate"),
+            certificate_name=config.make_name("Certificate"),
             domain_name=config.domain_name,
             validation=acm.CertificateValidation.from_dns(),
         )

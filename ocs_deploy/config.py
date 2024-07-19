@@ -28,7 +28,6 @@ class OCSConfig:
         self.account = config["CDK_ACCOUNT"]
         self.region = config["CDK_REGION"]
 
-        self.django_email_backend = config["DJANGO_EMAIL_BACKEND"]
         self.email_domain = config["EMAIL_DOMAIN"]
         self.domain_name = config["DOMAIN_NAME"]
 
@@ -43,6 +42,9 @@ class OCSConfig:
         self.terms_url = config.get("TERMS_URL", "")
         self.signup_enabled = config.get("SIGNUP_ENABLED", "False")
         self.slack_bot_name = config.get("SLACK_BOT_NAME", "OCS Bot")
+
+        self.taskbadger_org = config.get("TASKBADGER_ORG", "")
+        self.taskbadger_project = config.get("TASKBADGER_PROJECT", "")
 
     def stack_name(self, name: str):
         if name not in self.ALL_STACKS:

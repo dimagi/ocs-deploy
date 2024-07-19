@@ -16,7 +16,7 @@ class RedisStack(cdk.Stack):
             scope, config.stack_name(OCSConfig.REDIS_STACK), env=config.env()
         )
 
-        self.redis_instance = self.setup_redis_database(vpc, config)
+        self.setup_redis_database(vpc, config)
 
     def setup_redis_database(self, vpc, config: OCSConfig):
         redis_sec_group = ec2.SecurityGroup(
@@ -48,7 +48,7 @@ class RedisStack(cdk.Stack):
             config.make_name("RedisSlowLogs")
         )
 
-        redis_cluster = elasticache.CfnCacheCluster(
+        self.redis_cluster = elasticache.CfnCacheCluster(
             scope=self,
             id=config.make_name("RedisCluster"),
             cluster_name=config.make_name("RedisCluster"),
@@ -85,16 +85,14 @@ class RedisStack(cdk.Stack):
             ],
         )
 
-        redis_url = f"rediss://{redis_cluster.attr_redis_endpoint_address}:{redis_cluster.attr_redis_endpoint_port}"
+        redis_url = f"rediss://{self.redis_cluster.attr_redis_endpoint_address}:{self.redis_cluster.attr_redis_endpoint_port}"
 
-        secretsmanager.Secret(
+        self.redis_url_secret = secretsmanager.Secret(
             self,
             config.redis_url_secrets_name,
             secret_name=config.redis_url_secrets_name,
             secret_string_value=cdk.SecretValue.unsafe_plain_text(redis_url),
         )
-
-        return redis_cluster
 
     def create_cloudwatch_log_group(self, name):
         return logs.LogGroup(

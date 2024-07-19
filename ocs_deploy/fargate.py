@@ -91,7 +91,7 @@ class FargateStack(cdk.Stack):
                     "DJANGO_DATABASE_NAME": config.rds_db_name,
                     "DJANGO_DATABASE_HOST": rds_stack.db_instance.instance_endpoint.hostname,
                     "DJANGO_DATABASE_PORT": rds_stack.db_instance.db_instance_endpoint_port,
-                    "DJANGO_EMAIL_BACKEND": config.django_email_backend,
+                    "DJANGO_EMAIL_BACKEND": "anymail.backends.amazon_ses.EmailBackend",
                     "DJANGO_SETTINGS_MODULE": "gpt_playground.settings_production",
                     "PRIVACY_POLICY_URL": config.privacy_policy_url,
                     "TERMS_URL": config.terms_url,
@@ -99,6 +99,8 @@ class FargateStack(cdk.Stack):
                     "SLACK_BOT_NAME": config.slack_bot_name,
                     "USE_S3_STORAGE": "True",
                     "WHATSAPP_S3_AUDIO_BUCKET": config.s3_whatsapp_audio_bucket,
+                    "TASKBADGER_ORG": config.taskbadger_org,
+                    "TASKBADGER_PROJECT": config.taskbadger_project,
                 },
                 enable_logging=True,
                 log_driver=log_driver,
@@ -109,19 +111,15 @@ class FargateStack(cdk.Stack):
                     "DJANGO_DATABASE_PASSWORD": ecs.Secret.from_secrets_manager(
                         rds_stack.db_instance.secret, field="password"
                     ),
-                    # "REDIS_URL": ecs.Secret.from_secrets_manager(
-                    #     secretsmanager.Secret.from_secret_name_v2(
-                    #         self,
-                    #         id=config.redis_url_secrets_name,
-                    #         secret_name=config.redis_url_secrets_name,
-                    #     )
-                    # ),
+                    "REDIS_URL": ecs.Secret.from_secrets_manager(
+                        redis_stack.self.redis_url_secret
+                    ),
                     "SECRET_KEY": ecs.Secret.from_secrets_manager(django_secret_key),
-                    # can we remove these aws access keys and use IAM roles?
-                    # "AWS_SECRET_ACCESS_KEY": ecs.Secret.from_secrets_manager(TODO)
-                    # "AWS_SES_ACCESS_KEY": ecs.Secret.from_secrets_manager(TODO)
-                    # "AWS_SES_REGION": ecs.Secret.from_secrets_manager(TODO)
-                    # "AWS_SES_SECRET_KEY": ecs.Secret.from_secrets_manager(TODO)
+                    # Use IAM roles for access to these
+                    # "AWS_SECRET_ACCESS_KEY":
+                    # "AWS_SES_ACCESS_KEY":
+                    # "AWS_SES_REGION":
+                    # "AWS_SES_SECRET_KEY":
                     # "AZURE_SUBSCRIPTION_KEY": ecs.Secret.from_secrets_manager(TODO)
                     # "CRYPTOGRAPHY_SALT": ecs.Secret.from_secrets_manager(TODO)
                     # "OPENAI_API_KEY": ecs.Secret.from_secrets_manager(TODO)
@@ -130,8 +128,6 @@ class FargateStack(cdk.Stack):
                     # "SLACK_CLIENT_SECRET": ecs.Secret.from_secrets_manager(TODO)
                     # "SLACK_SIGNING_SECRET": ecs.Secret.from_secrets_manager(TODO)
                     # "TASKBADGER_API_KEY": ecs.Secret.from_secrets_manager(TODO)
-                    # "TASKBADGER_ORG": ecs.Secret.from_secrets_manager(TODO)
-                    # "TASKBADGER_PROJECT": ecs.Secret.from_secrets_manager(TODO)
                     # "TELEGRAM_SECRET_TOKEN": ecs.Secret.from_secrets_manager(TODO)
                 },
             ),
@@ -142,6 +138,7 @@ class FargateStack(cdk.Stack):
             public_load_balancer=True,
             load_balancer_name=config.make_name("LoadBalancer"),
             service_name=config.make_name("Django"),
+            # TODO: add certificate
             # // certificate: acm.Certificate.fromCertificateArn(this, `${props.appName}-${props.environment}-FargateServiceCertificate`, props.certificateArn),
             # // certificate,
             # // redirectHTTP: true,
@@ -225,4 +222,5 @@ class FargateStack(cdk.Stack):
                 ],
             )
         )
+        # TODO: add ses policy
         return task_role
