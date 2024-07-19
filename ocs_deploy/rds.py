@@ -50,7 +50,7 @@ class RdsStack(cdk.Stack):
         )
         rds_role.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
 
-        database_username = "ocs-db-user"
+        database_username = "ocs_db_user"
 
         # define postgresql database
         db_instance = rds.DatabaseInstance(
