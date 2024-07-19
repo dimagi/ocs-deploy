@@ -62,7 +62,13 @@ class OCSConfig:
 
     @property
     def rds_db_name(self):
-        return self.make_name("ocs-db")
+        """Name of the RDS database.
+        Must start with a letter and contain only alphanumeric characters."""
+
+        name = re.sub(r"[^a-zA-Z0-9]", "", self.app_name).lower()
+        if not name:
+            raise Exception("Invalid RDS database name")
+        return name
 
     @property
     def ecr_repo_name(self):
