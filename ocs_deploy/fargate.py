@@ -56,35 +56,8 @@ class FargateStack(cdk.Stack):
             cluster_name=config.make_name("Cluster"),
         )
 
-        # Task Role
-        task_role = iam.Role(
-            self,
-            "ecsTaskExecutionRole",
-            assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
-        )
-
-        # Add permissions to the Task Role
-        task_role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "service-role/AmazonECSTaskExecutionRolePolicy"
-            )
-        )
-
-        # Add permissions to the Task Role to allow it to pull images from ECR
-        task_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=[
-                    "ecr:GetAuthorizationToken",
-                    "ecr:BatchCheckLayerAvailability",
-                    "ecr:GetDownloadUrlForLayer",
-                    "ecr:BatchGetImage",
-                    "logs:CreateLogStream",
-                    "logs:PutLogEvents",
-                ],
-                resources=["*"],
-            )
-        )
+        task_role = self._get_task_role(config)
+        execution_role = self._get_execution_role()
 
         # create a task definition with CloudWatch Logs
         log_driver = ecs.AwsLogDriver(stream_prefix=config.make_name())
@@ -106,6 +79,7 @@ class FargateStack(cdk.Stack):
             task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
                 image=ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest"),
                 container_name="web",
+                execution_role=execution_role,
                 task_role=task_role,
                 container_port=container_port,
                 environment={
@@ -124,7 +98,7 @@ class FargateStack(cdk.Stack):
                     "SIGNUP_ENABLED": config.signup_enabled,
                     "SLACK_BOT_NAME": config.slack_bot_name,
                     "USE_S3_STORAGE": "True",
-                    "WHATSAPP_S3_AUDIO_BUCKET": config.whatsapp_s3_audio_bucket,
+                    "WHATSAPP_S3_AUDIO_BUCKET": config.s3_whatsapp_audio_bucket,
                 },
                 enable_logging=True,
                 log_driver=log_driver,
@@ -192,4 +166,63 @@ class FargateStack(cdk.Stack):
             config.make_name("FargateServiceLoadBalancerDNS"),
             value=fargate_service.load_balancer.load_balancer_dns_name,
         )
+
         return fargate_service
+
+    def _get_execution_role(self):
+        """Task execution role with access to read from ECS"""
+        execution_role = iam.Role(
+            self,
+            "ecsTaskExecutionRole",
+            assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+        )
+        # Add permissions to the Task Role
+        execution_role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name(
+                "service-role/AmazonECSTaskExecutionRolePolicy"
+            )
+        )
+        # Add permissions to the Task Role to allow it to pull images from ECR
+        execution_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "ecr:GetAuthorizationToken",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                ],
+                resources=["*"],
+            )
+        )
+        return execution_role
+
+    def _get_task_role(self, config):
+        """Task role used by the containers."""
+        task_role = iam.Role(
+            self,
+            "ecsTaskRole",
+            assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+        )
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "s3:PutObject",
+                    "s3:GetObjectAcl",
+                    "s3:GetObject",
+                    "s3:ListBucket",
+                    "s3:DeleteObject",
+                    "s3:PutObjectAcl",
+                    "s3:GetBucketAcl",
+                ],
+                effect=iam.Effect.ALLOW,
+                resources=[
+                    f"arn:aws:s3:::{config.s3_private_bucket_name}/*"
+                    f"arn:aws:s3:::{config.s3_public_bucket_name}/*"
+                    f"arn:aws:s3:::{config.s3_whatsapp_audio_bucket}/*"
+                ],
+            )
+        )
+        return task_role
