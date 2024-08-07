@@ -96,5 +96,5 @@ Steps:
 4. Set up the Django service
 
     ```shell
-    inv deploy -s djangp -v
+    inv deploy -s django -v
     ```

@@ -112,7 +112,7 @@ class FargateStack(cdk.Stack):
                         rds_stack.db_instance.secret, field="password"
                     ),
                     "REDIS_URL": ecs.Secret.from_secrets_manager(
-                        redis_stack.self.redis_url_secret
+                        redis_stack.redis_url_secret
                     ),
                     "SECRET_KEY": ecs.Secret.from_secrets_manager(django_secret_key),
                     # Use IAM roles for access to these
@@ -120,9 +120,7 @@ class FargateStack(cdk.Stack):
                     # "AWS_SES_ACCESS_KEY":
                     # "AWS_SES_REGION":
                     # "AWS_SES_SECRET_KEY":
-                    # "AZURE_SUBSCRIPTION_KEY": ecs.Secret.from_secrets_manager(TODO)
                     # "CRYPTOGRAPHY_SALT": ecs.Secret.from_secrets_manager(TODO)
-                    # "OPENAI_API_KEY": ecs.Secret.from_secrets_manager(TODO)
                     # "SENTRY_DSN": ecs.Secret.from_secrets_manager(TODO)
                     # "SLACK_CLIENT_ID": ecs.Secret.from_secrets_manager(TODO)
                     # "SLACK_CLIENT_SECRET": ecs.Secret.from_secrets_manager(TODO)
