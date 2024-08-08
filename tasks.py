@@ -5,7 +5,7 @@ from invoke import Context, Exit, task
 
 from ocs_deploy.config import OCSConfig
 
-DEFAULT_PROFILE = os.environ.get("AWS_PROFILE", "ocs-test")
+DEFAULT_PROFILE = os.environ.get("AWS_PROFILE")
 
 
 @task
@@ -25,9 +25,13 @@ def _check_credentials(c: Context, profile: str):
     help={
         "stacks": f"Comma-separated list of the stacks to deploy ({' | '.join(OCSConfig.ALL_STACKS)})",
         "verbose": "Enable verbose output",
+        "profile": "AWS profile to use for deployment. Will read from AWS_PROFILE env var if not set.",
     }
 )
 def deploy(c: Context, stacks=None, verbose=False, profile=DEFAULT_PROFILE):
+    if not profile:
+        profile = input("AWS profile not set. Enter profile: ")
+
     if not _check_credentials(c, profile):
         if not login(c, profile):
             raise Exit("Failed to login", -1)
