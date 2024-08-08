@@ -16,11 +16,11 @@ class DomainStack(cdk.Stack):
             scope, config.stack_name(OCSConfig.DOMAINS_STACK), env=config.env()
         )
 
-        self.create_certificate(config)
+        self.certificate = self.create_certificate(config)
         self.create_email_identity(config)
 
     def create_certificate(self, config):
-        acm.Certificate(
+        return acm.Certificate(
             self,
             config.make_name("Certificate"),
             certificate_name=config.make_name("Certificate"),

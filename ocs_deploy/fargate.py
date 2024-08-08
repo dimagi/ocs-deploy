@@ -4,6 +4,7 @@ from aws_cdk import (
     aws_ecs as ecs,
     aws_ecs_patterns as ecs_patterns,
     aws_iam as iam,
+    aws_elasticloadbalancingv2 as elb,
     aws_secretsmanager as secretsmanager,
 )
 from constructs import Construct
@@ -22,18 +23,25 @@ class FargateStack(cdk.Stack):
     """
 
     def __init__(
-        self, scope: Construct, vpc, ecr_repo, rds_stack, redis_stack, config: OCSConfig
+        self,
+        scope: Construct,
+        vpc,
+        ecr_repo,
+        rds_stack,
+        redis_stack,
+        domain_stack,
+        config: OCSConfig,
     ) -> None:
         super().__init__(
             scope, config.stack_name(OCSConfig.DJANGO_STACK), env=config.env()
         )
 
         self.fargate_service = self.setup_fargate_service(
-            vpc, ecr_repo, rds_stack, redis_stack, config
+            vpc, ecr_repo, rds_stack, redis_stack, domain_stack, config
         )
 
     def setup_fargate_service(
-        self, vpc, ecr_repo, rds_stack, redis_stack, config: OCSConfig
+        self, vpc, ecr_repo, rds_stack, redis_stack, domain_stack, config: OCSConfig
     ):
         http_sg = ec2.SecurityGroup(
             self, config.make_name("HttpSG"), vpc=vpc, allow_all_outbound=True
@@ -137,12 +145,9 @@ class FargateStack(cdk.Stack):
             public_load_balancer=True,
             load_balancer_name=config.make_name("LoadBalancer"),
             service_name=config.make_name("Django"),
-            # TODO: add certificate
-            # // certificate: acm.Certificate.fromCertificateArn(this, `${props.appName}-${props.environment}-FargateServiceCertificate`, props.certificateArn),
-            # // certificate,
-            # // redirectHTTP: true,
-            # // protocol: cdk.aws_elasticloadbalancingv2.ApplicationProtocol.HTTPS,
-            # // protocolVersion: cdk.aws_elasticloadbalancingv2.ApplicationProtocolVersion.HTTP1,
+            certificate=domain_stack.certificate,
+            redirect_http=True,
+            protocol=elb.ApplicationProtocol.HTTPS,
         )
 
         # Setup AutoScaling policy

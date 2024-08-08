@@ -31,7 +31,7 @@ redis_stack = RedisStack(app, vpc_stack.vpc, config)
 redis_stack.add_dependency(vpc_stack)
 
 ocs_services = FargateStack(
-    app, vpc_stack.vpc, ecr_stack.repo, rds_stack, redis_stack, config
+    app, vpc_stack.vpc, ecr_stack.repo, rds_stack, redis_stack, domain_stack, config
 )
 ocs_services.add_dependency(vpc_stack)
 ocs_services.add_dependency(ecr_stack)
