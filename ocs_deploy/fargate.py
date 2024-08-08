@@ -53,8 +53,6 @@ class FargateStack(cdk.Stack):
         )
         https_sg.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(443))
 
-        container_port = 8000
-
         # define a cluster with spot instances, linux type
         cluster = ecs.Cluster(
             self,
@@ -64,6 +62,47 @@ class FargateStack(cdk.Stack):
             cluster_name=config.make_name("Cluster"),
         )
 
+        # Instantiate Fargate Service with just cluster and image
+        fargate_service = ecs_patterns.ApplicationLoadBalancedFargateService(
+            self,
+            config.make_name("FargateService"),
+            cluster=cluster,
+            security_groups=[http_sg, https_sg],
+            cpu=256,
+            memory_limit_mib=512,
+            desired_count=1,
+            public_load_balancer=True,
+            load_balancer_name=config.make_name("LoadBalancer"),
+            service_name=config.make_name("Django"),
+            certificate=domain_stack.certificate,
+            redirect_http=True,
+            protocol=elb.ApplicationProtocol.HTTPS,
+            task_definition=self._get_task_definition(
+                rds_stack, redis_stack, ecr_repo, config
+            ),
+        )
+
+        # Setup AutoScaling policy
+        scaling = fargate_service.service.auto_scale_task_count(
+            max_capacity=2, min_capacity=1
+        )
+        scaling.scale_on_cpu_utilization(
+            config.make_name("CpuScaling"),
+            target_utilization_percent=70,
+            scale_in_cooldown=cdk.Duration.seconds(60),
+            scale_out_cooldown=cdk.Duration.seconds(60),
+        )
+
+        # print out fargateService load balancer url
+        cdk.CfnOutput(
+            self,
+            config.make_name("FargateServiceLoadBalancerDNS"),
+            value=fargate_service.load_balancer.load_balancer_dns_name,
+        )
+
+        return fargate_service
+
+    def _get_task_definition(self, rds_stack, redis_stack, ecr_repo, config: OCSConfig):
         task_role = self._get_task_role(config)
         execution_role = self._get_execution_role()
 
@@ -79,6 +118,7 @@ class FargateStack(cdk.Stack):
             ),
         )
 
+        container_port = 8000
         environment = {
             "ACCOUNT_EMAIL_VERIFICATION": "mandatory",
             "AWS_PRIVATE_STORAGE_BUCKET_NAME": config.s3_private_bucket_name,
@@ -162,44 +202,6 @@ class FargateStack(cdk.Stack):
                 condition=ecs.ContainerDependencyCondition.SUCCESS,
             )
         )
-
-        # Instantiate Fargate Service with just cluster and image
-        fargate_service = ecs_patterns.ApplicationLoadBalancedFargateService(
-            self,
-            config.make_name("FargateService"),
-            cluster=cluster,
-            security_groups=[http_sg, https_sg],
-            cpu=256,
-            memory_limit_mib=512,
-            desired_count=1,
-            public_load_balancer=True,
-            load_balancer_name=config.make_name("LoadBalancer"),
-            service_name=config.make_name("Django"),
-            certificate=domain_stack.certificate,
-            redirect_http=True,
-            protocol=elb.ApplicationProtocol.HTTPS,
-            task_definition=django_task,
-        )
-
-        # Setup AutoScaling policy
-        scaling = fargate_service.service.auto_scale_task_count(
-            max_capacity=2, min_capacity=1
-        )
-        scaling.scale_on_cpu_utilization(
-            config.make_name("CpuScaling"),
-            target_utilization_percent=70,
-            scale_in_cooldown=cdk.Duration.seconds(60),
-            scale_out_cooldown=cdk.Duration.seconds(60),
-        )
-
-        # print out fargateService load balancer url
-        cdk.CfnOutput(
-            self,
-            config.make_name("FargateServiceLoadBalancerDNS"),
-            value=fargate_service.load_balancer.load_balancer_dns_name,
-        )
-
-        return fargate_service
 
     def _get_execution_role(self):
         """Task execution role with access to read from ECS"""
