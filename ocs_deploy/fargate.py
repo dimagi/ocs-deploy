@@ -93,6 +93,7 @@ class FargateStack(cdk.Stack):
                     "DJANGO_DATABASE_PORT": rds_stack.db_instance.db_instance_endpoint_port,
                     "DJANGO_EMAIL_BACKEND": "anymail.backends.amazon_ses.EmailBackend",
                     "DJANGO_SETTINGS_MODULE": "gpt_playground.settings_production",
+                    "PORT": str(container_port),
                     "PRIVACY_POLICY_URL": config.privacy_policy_url,
                     "TERMS_URL": config.terms_url,
                     "SIGNUP_ENABLED": config.signup_enabled,
