@@ -79,66 +79,95 @@ class FargateStack(cdk.Stack):
             ),
         )
 
+        environment = {
+            "ACCOUNT_EMAIL_VERIFICATION": "mandatory",
+            "AWS_PRIVATE_STORAGE_BUCKET_NAME": config.s3_private_bucket_name,
+            "AWS_PUBLIC_STORAGE_BUCKET_NAME": config.s3_public_bucket_name,
+            "AWS_S3_REGION": config.region,
+            "AZURE_REGION": config.azure_region,
+            "DJANGO_DATABASE_NAME": config.rds_db_name,
+            "DJANGO_DATABASE_HOST": rds_stack.db_instance.instance_endpoint.hostname,
+            "DJANGO_DATABASE_PORT": rds_stack.db_instance.db_instance_endpoint_port,
+            "DJANGO_EMAIL_BACKEND": "anymail.backends.amazon_ses.EmailBackend",
+            "DJANGO_SECURE_SSL_REDIRECT": "false",  # handled by the load balancer
+            "DJANGO_SETTINGS_MODULE": "gpt_playground.settings_production",
+            "PORT": str(container_port),
+            "PRIVACY_POLICY_URL": config.privacy_policy_url,
+            "TERMS_URL": config.terms_url,
+            "SIGNUP_ENABLED": config.signup_enabled,
+            "SLACK_BOT_NAME": config.slack_bot_name,
+            "USE_S3_STORAGE": "True",
+            "WHATSAPP_S3_AUDIO_BUCKET": config.s3_whatsapp_audio_bucket,
+            "TASKBADGER_ORG": config.taskbadger_org,
+            "TASKBADGER_PROJECT": config.taskbadger_project,
+        }
+        secrets = {
+            "DJANGO_DATABASE_USER": ecs.Secret.from_secrets_manager(
+                rds_stack.db_instance.secret, field="username"
+            ),
+            "DJANGO_DATABASE_PASSWORD": ecs.Secret.from_secrets_manager(
+                rds_stack.db_instance.secret, field="password"
+            ),
+            "REDIS_URL": ecs.Secret.from_secrets_manager(redis_stack.redis_url_secret),
+            "SECRET_KEY": ecs.Secret.from_secrets_manager(django_secret_key),
+            # Use IAM roles for access to these
+            # "AWS_SECRET_ACCESS_KEY":
+            # "AWS_SES_ACCESS_KEY":
+            # "AWS_SES_REGION":
+            # "AWS_SES_SECRET_KEY":
+            # "CRYPTOGRAPHY_SALT": ecs.Secret.from_secrets_manager(TODO)
+            # "SENTRY_DSN": ecs.Secret.from_secrets_manager(TODO)
+            # "SLACK_CLIENT_ID": ecs.Secret.from_secrets_manager(TODO)
+            # "SLACK_CLIENT_SECRET": ecs.Secret.from_secrets_manager(TODO)
+            # "SLACK_SIGNING_SECRET": ecs.Secret.from_secrets_manager(TODO)
+            # "TASKBADGER_API_KEY": ecs.Secret.from_secrets_manager(TODO)
+            # "TELEGRAM_SECRET_TOKEN": ecs.Secret.from_secrets_manager(TODO)
+        }
+
+        image = ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest")
+        django_task = ecs.FargateTaskDefinition(
+            self,
+            id=config.make_name("DjangoMigrations"),
+            cpu=256,
+            memory_limit_mib=512,
+            execution_role=execution_role,
+            task_role=task_role,
+        )
+        migration_container = django_task.add_container(
+            id="django_container",
+            image=image,
+            container_name="migrate",
+            command=["python", "manage.py", "migrate"],
+            health_check=None,
+            essential=False,
+            environment=environment,
+            secrets=secrets,
+            logging=log_driver,
+        )
+
+        webserver_container = django_task.add_container(
+            id="web",
+            image=image,
+            container_name="web",
+            essential=True,
+            port_mappings=[ecs.PortMapping(container_port=container_port)],
+            environment=environment,
+            secrets=secrets,
+            logging=log_driver,
+        )
+
+        webserver_container.add_container_dependencies(
+            ecs.ContainerDependency(
+                container=migration_container,
+                condition=ecs.ContainerDependencyCondition.SUCCESS,
+            )
+        )
+
         # Instantiate Fargate Service with just cluster and image
         fargate_service = ecs_patterns.ApplicationLoadBalancedFargateService(
             self,
             config.make_name("FargateService"),
             cluster=cluster,
-            task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
-                image=ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest"),
-                container_name="web",
-                execution_role=execution_role,
-                task_role=task_role,
-                container_port=container_port,
-                environment={
-                    "ACCOUNT_EMAIL_VERIFICATION": "mandatory",
-                    "AWS_PRIVATE_STORAGE_BUCKET_NAME": config.s3_private_bucket_name,
-                    "AWS_PUBLIC_STORAGE_BUCKET_NAME": config.s3_public_bucket_name,
-                    "AWS_S3_REGION": config.region,
-                    "AZURE_REGION": config.azure_region,
-                    "DJANGO_DATABASE_NAME": config.rds_db_name,
-                    "DJANGO_DATABASE_HOST": rds_stack.db_instance.instance_endpoint.hostname,
-                    "DJANGO_DATABASE_PORT": rds_stack.db_instance.db_instance_endpoint_port,
-                    "DJANGO_EMAIL_BACKEND": "anymail.backends.amazon_ses.EmailBackend",
-                    "DJANGO_SECURE_SSL_REDIRECT": "false",  # handled by the load balancer
-                    "DJANGO_SETTINGS_MODULE": "gpt_playground.settings_production",
-                    "PORT": str(container_port),
-                    "PRIVACY_POLICY_URL": config.privacy_policy_url,
-                    "TERMS_URL": config.terms_url,
-                    "SIGNUP_ENABLED": config.signup_enabled,
-                    "SLACK_BOT_NAME": config.slack_bot_name,
-                    "USE_S3_STORAGE": "True",
-                    "WHATSAPP_S3_AUDIO_BUCKET": config.s3_whatsapp_audio_bucket,
-                    "TASKBADGER_ORG": config.taskbadger_org,
-                    "TASKBADGER_PROJECT": config.taskbadger_project,
-                },
-                enable_logging=True,
-                log_driver=log_driver,
-                secrets={
-                    "DJANGO_DATABASE_USER": ecs.Secret.from_secrets_manager(
-                        rds_stack.db_instance.secret, field="username"
-                    ),
-                    "DJANGO_DATABASE_PASSWORD": ecs.Secret.from_secrets_manager(
-                        rds_stack.db_instance.secret, field="password"
-                    ),
-                    "REDIS_URL": ecs.Secret.from_secrets_manager(
-                        redis_stack.redis_url_secret
-                    ),
-                    "SECRET_KEY": ecs.Secret.from_secrets_manager(django_secret_key),
-                    # Use IAM roles for access to these
-                    # "AWS_SECRET_ACCESS_KEY":
-                    # "AWS_SES_ACCESS_KEY":
-                    # "AWS_SES_REGION":
-                    # "AWS_SES_SECRET_KEY":
-                    # "CRYPTOGRAPHY_SALT": ecs.Secret.from_secrets_manager(TODO)
-                    # "SENTRY_DSN": ecs.Secret.from_secrets_manager(TODO)
-                    # "SLACK_CLIENT_ID": ecs.Secret.from_secrets_manager(TODO)
-                    # "SLACK_CLIENT_SECRET": ecs.Secret.from_secrets_manager(TODO)
-                    # "SLACK_SIGNING_SECRET": ecs.Secret.from_secrets_manager(TODO)
-                    # "TASKBADGER_API_KEY": ecs.Secret.from_secrets_manager(TODO)
-                    # "TELEGRAM_SECRET_TOKEN": ecs.Secret.from_secrets_manager(TODO)
-                },
-            ),
             security_groups=[http_sg, https_sg],
             cpu=256,
             memory_limit_mib=512,
@@ -149,6 +178,7 @@ class FargateStack(cdk.Stack):
             certificate=domain_stack.certificate,
             redirect_http=True,
             protocol=elb.ApplicationProtocol.HTTPS,
+            task_definition=django_task,
         )
 
         # Setup AutoScaling policy
