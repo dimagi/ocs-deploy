@@ -100,6 +100,7 @@ class FargateStack(cdk.Stack):
                     "DJANGO_DATABASE_HOST": rds_stack.db_instance.instance_endpoint.hostname,
                     "DJANGO_DATABASE_PORT": rds_stack.db_instance.db_instance_endpoint_port,
                     "DJANGO_EMAIL_BACKEND": "anymail.backends.amazon_ses.EmailBackend",
+                    "DJANGO_SECURE_SSL_REDIRECT": "false",  # handled by the load balancer
                     "DJANGO_SETTINGS_MODULE": "gpt_playground.settings_production",
                     "PORT": str(container_port),
                     "PRIVACY_POLICY_URL": config.privacy_policy_url,
@@ -114,7 +115,7 @@ class FargateStack(cdk.Stack):
                 enable_logging=True,
                 log_driver=log_driver,
                 secrets={
-                    "DJANGO_DATABASE_USERNAME": ecs.Secret.from_secrets_manager(
+                    "DJANGO_DATABASE_USER": ecs.Secret.from_secrets_manager(
                         rds_stack.db_instance.secret, field="username"
                     ),
                     "DJANGO_DATABASE_PASSWORD": ecs.Secret.from_secrets_manager(
