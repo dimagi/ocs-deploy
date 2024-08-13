@@ -1,3 +1,5 @@
+from functools import cached_property
+
 import aws_cdk as cdk
 from aws_cdk import (
     aws_ec2 as ec2,
@@ -10,6 +12,8 @@ from aws_cdk import (
 from constructs import Construct
 
 from ocs_deploy.config import OCSConfig
+
+CONTAINER_PORT = 8000
 
 
 class FargateStack(cdk.Stack):
@@ -36,13 +40,15 @@ class FargateStack(cdk.Stack):
             scope, config.stack_name(OCSConfig.DJANGO_STACK), env=config.env()
         )
 
+        self.config = config
+        self.rds_stack = rds_stack
+        self.redis_stack = redis_stack
+
         self.fargate_service = self.setup_fargate_service(
-            vpc, ecr_repo, rds_stack, redis_stack, domain_stack, config
+            vpc, ecr_repo, domain_stack, config
         )
 
-    def setup_fargate_service(
-        self, vpc, ecr_repo, rds_stack, redis_stack, domain_stack, config: OCSConfig
-    ):
+    def setup_fargate_service(self, vpc, ecr_repo, domain_stack, config: OCSConfig):
         http_sg = ec2.SecurityGroup(
             self, config.make_name("HttpSG"), vpc=vpc, allow_all_outbound=True
         )
@@ -62,8 +68,10 @@ class FargateStack(cdk.Stack):
             cluster_name=config.make_name("Cluster"),
         )
 
-        # Instantiate Fargate Service with just cluster and image
-        fargate_service = ecs_patterns.ApplicationLoadBalancedFargateService(
+        task_definition, webserver_container = self._get_web_task_definition(
+            ecr_repo, config
+        )
+        django_web_service = ecs_patterns.ApplicationLoadBalancedFargateService(
             self,
             config.make_name("FargateService"),
             cluster=cluster,
@@ -77,13 +85,11 @@ class FargateStack(cdk.Stack):
             certificate=domain_stack.certificate,
             redirect_http=True,
             protocol=elb.ApplicationProtocol.HTTPS,
-            task_definition=self._get_task_definition(
-                rds_stack, redis_stack, ecr_repo, config
-            ),
+            task_definition=task_definition,
         )
 
         # Setup AutoScaling policy
-        scaling = fargate_service.service.auto_scale_task_count(
+        scaling = django_web_service.service.auto_scale_task_count(
             max_capacity=2, min_capacity=1
         )
         scaling.scale_on_cpu_utilization(
@@ -97,74 +103,38 @@ class FargateStack(cdk.Stack):
         cdk.CfnOutput(
             self,
             config.make_name("FargateServiceLoadBalancerDNS"),
-            value=fargate_service.load_balancer.load_balancer_dns_name,
+            value=django_web_service.load_balancer.load_balancer_dns_name,
         )
 
-        return fargate_service
+        ecs.FargateService(
+            self,
+            config.make_name("CeleryService"),
+            cluster=cluster,
+            # security_groups=[http_sg, https_sg],
+            desired_count=1,
+            service_name=config.make_name("Celery"),
+            task_definition=self._get_celery_task_definition(
+                ecr_repo, config, webserver_container, is_beat=False
+            ),
+        )
 
-    def _get_task_definition(self, rds_stack, redis_stack, ecr_repo, config: OCSConfig):
-        task_role = self._get_task_role(config)
-        execution_role = self._get_execution_role()
+        ecs.FargateService(
+            self,
+            config.make_name("CeleryBeatService"),
+            cluster=cluster,
+            # security_groups=[http_sg, https_sg],
+            desired_count=1,
+            service_name=config.make_name("CeleryBeat"),
+            task_definition=self._get_celery_task_definition(
+                ecr_repo, config, webserver_container, is_beat=True
+            ),
+        )
 
+        return django_web_service
+
+    def _get_web_task_definition(self, ecr_repo, config: OCSConfig):
         # create a task definition with CloudWatch Logs
         log_driver = ecs.AwsLogDriver(stream_prefix=config.make_name())
-
-        django_secret_key = secretsmanager.Secret(
-            self,
-            config.django_secret_key_secrets_name,
-            secret_name=config.django_secret_key_secrets_name,
-            generate_secret_string=secretsmanager.SecretStringGenerator(
-                password_length=50,
-            ),
-        )
-
-        container_port = 8000
-        environment = {
-            "ACCOUNT_EMAIL_VERIFICATION": "mandatory",
-            "AWS_PRIVATE_STORAGE_BUCKET_NAME": config.s3_private_bucket_name,
-            "AWS_PUBLIC_STORAGE_BUCKET_NAME": config.s3_public_bucket_name,
-            "AWS_S3_REGION": config.region,
-            "AZURE_REGION": config.azure_region,
-            "DJANGO_DATABASE_NAME": config.rds_db_name,
-            "DJANGO_DATABASE_HOST": rds_stack.db_instance.instance_endpoint.hostname,
-            "DJANGO_DATABASE_PORT": rds_stack.db_instance.db_instance_endpoint_port,
-            "DJANGO_EMAIL_BACKEND": "anymail.backends.amazon_ses.EmailBackend",
-            "DJANGO_SECURE_SSL_REDIRECT": "false",  # handled by the load balancer
-            "DJANGO_SETTINGS_MODULE": "gpt_playground.settings_production",
-            "PORT": str(container_port),
-            "PRIVACY_POLICY_URL": config.privacy_policy_url,
-            "TERMS_URL": config.terms_url,
-            "SIGNUP_ENABLED": config.signup_enabled,
-            "SLACK_BOT_NAME": config.slack_bot_name,
-            "USE_S3_STORAGE": "True",
-            "WHATSAPP_S3_AUDIO_BUCKET": config.s3_whatsapp_audio_bucket,
-            "TASKBADGER_ORG": config.taskbadger_org,
-            "TASKBADGER_PROJECT": config.taskbadger_project,
-        }
-        secrets = {
-            "DJANGO_DATABASE_USER": ecs.Secret.from_secrets_manager(
-                rds_stack.db_instance.secret, field="username"
-            ),
-            "DJANGO_DATABASE_PASSWORD": ecs.Secret.from_secrets_manager(
-                rds_stack.db_instance.secret, field="password"
-            ),
-            "REDIS_URL": ecs.Secret.from_secrets_manager(redis_stack.redis_url_secret),
-            "SECRET_KEY": ecs.Secret.from_secrets_manager(django_secret_key),
-            # Use IAM roles for access to these
-            # "AWS_SECRET_ACCESS_KEY":
-            # "AWS_SES_ACCESS_KEY":
-            # "AWS_SES_REGION":
-            # "AWS_SES_SECRET_KEY":
-        }
-
-        for secret in config.get_secrets_list():
-            if secret.managed:
-                continue
-            secrets[secret.name.upper()] = ecs.Secret.from_secrets_manager(
-                secretsmanager.Secret.from_secret_name_v2(
-                    self, secret.name, secret.name
-                )
-            )
 
         image = ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest")
         django_task = ecs.FargateTaskDefinition(
@@ -172,8 +142,8 @@ class FargateStack(cdk.Stack):
             id=config.make_name("DjangoMigrations"),
             cpu=256,
             memory_limit_mib=512,
-            execution_role=execution_role,
-            task_role=task_role,
+            execution_role=self.execution_role,
+            task_role=self.task_role,
         )
         migration_container = django_task.add_container(
             id="django_container",
@@ -182,8 +152,8 @@ class FargateStack(cdk.Stack):
             command=["python", "manage.py", "migrate"],
             health_check=None,
             essential=False,
-            environment=environment,
-            secrets=secrets,
+            environment=self.env_dict,
+            secrets=self.secrets_dict,
             logging=log_driver,
         )
 
@@ -192,9 +162,9 @@ class FargateStack(cdk.Stack):
             image=image,
             container_name="web",
             essential=True,
-            port_mappings=[ecs.PortMapping(container_port=container_port)],
-            environment=environment,
-            secrets=secrets,
+            port_mappings=[ecs.PortMapping(container_port=CONTAINER_PORT)],
+            environment=self.env_dict,
+            secrets=self.secrets_dict,
             logging=log_driver,
         )
 
@@ -205,9 +175,114 @@ class FargateStack(cdk.Stack):
             )
         )
 
-        return django_task
+        return django_task, webserver_container
 
-    def _get_execution_role(self):
+    def _get_celery_task_definition(
+        self, ecr_repo, config: OCSConfig, webserver_container, is_beat
+    ):
+        log_driver = ecs.AwsLogDriver(stream_prefix=config.make_name())
+
+        image = ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest")
+        name = "CeleryBeatTask" if is_beat else "CeleryWorkerTask"
+        celery_task = ecs.FargateTaskDefinition(
+            self,
+            id=config.make_name(name),
+            cpu=256,
+            memory_limit_mib=512,
+            execution_role=self.execution_role,
+            task_role=self.task_role,
+        )
+
+        if is_beat:
+            command = "celery -A gpt_playground beat -l INFO".split(" ")
+        else:
+            command = "celery -A gpt_playground worker -l INFO --pool gevent --concurrency 100".split(
+                " "
+            )
+        celery_container = celery_task.add_container(
+            id="celery",
+            image=image,
+            container_name="celery",
+            essential=True,
+            environment=self.env_dict,
+            secrets=self.secrets_dict,
+            logging=log_driver,
+            command=command,
+        )
+
+        celery_container.add_container_dependencies(
+            ecs.ContainerDependency(
+                container=webserver_container,
+                condition=ecs.ContainerDependencyCondition.START,
+            )
+        )
+
+        return celery_task
+
+    @cached_property
+    def secrets_dict(self):
+        django_secret_key = secretsmanager.Secret(
+            self,
+            self.config.django_secret_key_secrets_name,
+            secret_name=self.config.django_secret_key_secrets_name,
+            generate_secret_string=secretsmanager.SecretStringGenerator(
+                password_length=50,
+            ),
+        )
+        secrets = {
+            "DJANGO_DATABASE_USER": ecs.Secret.from_secrets_manager(
+                self.rds_stack.db_instance.secret, field="username"
+            ),
+            "DJANGO_DATABASE_PASSWORD": ecs.Secret.from_secrets_manager(
+                self.rds_stack.db_instance.secret, field="password"
+            ),
+            "REDIS_URL": ecs.Secret.from_secrets_manager(
+                self.redis_stack.redis_url_secret
+            ),
+            "SECRET_KEY": ecs.Secret.from_secrets_manager(django_secret_key),
+            # Use IAM roles for access to these
+            # "AWS_SECRET_ACCESS_KEY":
+            # "AWS_SES_ACCESS_KEY":
+            # "AWS_SES_REGION":
+            # "AWS_SES_SECRET_KEY":
+        }
+        for secret in self.config.get_secrets_list():
+            if secret.managed:
+                continue
+            secrets[secret.name.upper()] = ecs.Secret.from_secrets_manager(
+                secretsmanager.Secret.from_secret_name_v2(
+                    self, secret.name, secret.name
+                )
+            )
+        return secrets
+
+    @cached_property
+    def env_dict(self):
+        return {
+            "ACCOUNT_EMAIL_VERIFICATION": "mandatory",
+            "AWS_PRIVATE_STORAGE_BUCKET_NAME": self.config.s3_private_bucket_name,
+            "AWS_PUBLIC_STORAGE_BUCKET_NAME": self.config.s3_public_bucket_name,
+            "AWS_S3_REGION": self.config.region,
+            "AZURE_REGION": self.config.azure_region,
+            "DJANGO_DATABASE_NAME": self.config.rds_db_name,
+            "DJANGO_DATABASE_HOST": self.rds_stack.db_instance.instance_endpoint.hostname,
+            "DJANGO_DATABASE_PORT": self.rds_stack.db_instance.db_instance_endpoint_port,
+            "DJANGO_EMAIL_BACKEND": "anymail.backends.amazon_ses.EmailBackend",
+            "DJANGO_SECURE_SSL_REDIRECT": "false",  # handled by the load balancer
+            "DJANGO_SETTINGS_MODULE": "gpt_playground.settings_production",
+            "PORT": str(CONTAINER_PORT),
+            "PRIVACY_POLICY_URL": self.config.privacy_policy_url,
+            "TERMS_URL": self.config.terms_url,
+            "SIGNUP_ENABLED": self.config.signup_enabled,
+            "SLACK_BOT_NAME": self.config.slack_bot_name,
+            "USE_S3_STORAGE": "True",
+            "WHATSAPP_S3_AUDIO_BUCKET": self.config.s3_whatsapp_audio_bucket,
+            "TASKBADGER_ORG": self.config.taskbadger_org,
+            "TASKBADGER_PROJECT": self.config.taskbadger_project,
+        }
+
+    @cached_property
+    def execution_role(self):
         """Task execution role with access to read from ECS"""
         execution_role = iam.Role(
             self,
@@ -237,7 +312,8 @@ class FargateStack(cdk.Stack):
         )
         return execution_role
 
-    def _get_task_role(self, config):
+    @cached_property
+    def task_role(self):
         """Task role used by the containers."""
         task_role = iam.Role(
             self,
@@ -257,9 +333,9 @@ class FargateStack(cdk.Stack):
                 ],
                 effect=iam.Effect.ALLOW,
                 resources=[
-                    f"arn:aws:s3:::{config.s3_private_bucket_name}/*"
-                    f"arn:aws:s3:::{config.s3_public_bucket_name}/*"
-                    f"arn:aws:s3:::{config.s3_whatsapp_audio_bucket}/*"
+                    f"arn:aws:s3:::{self.config.s3_private_bucket_name}/*"
+                    f"arn:aws:s3:::{self.config.s3_public_bucket_name}/*"
+                    f"arn:aws:s3:::{self.config.s3_whatsapp_audio_bucket}/*"
                 ],
             )
         )
