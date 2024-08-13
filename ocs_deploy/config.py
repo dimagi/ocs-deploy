@@ -1,7 +1,11 @@
+import dataclasses
 import os
 import re
+from datetime import datetime
+from pathlib import Path
 
 import aws_cdk as cdk
+import yaml
 
 
 class OCSConfig:
@@ -83,10 +87,6 @@ class OCSConfig:
         return self.make_name("ecr-repo")
 
     @property
-    def rds_url_secrets_name(self):
-        return self.make_secret_name("rds-db-url")
-
-    @property
     def redis_url_secrets_name(self):
         return self.make_secret_name("redis-url")
 
@@ -106,3 +106,64 @@ class OCSConfig:
     @property
     def s3_whatsapp_audio_bucket(self):
         return self.make_name("s3-whatsapp-audio")
+
+    def normalize_secret_name(self, name):
+        prefix = self.make_secret_name("")
+        if not name.startswith(prefix):
+            name = self.make_secret_name(name)
+        return name
+
+    def get_secret(self, name):
+        name = self.normalize_secret_name(name)
+        found = [secret for secret in self.get_secrets_list() if secret.name == name]
+        if not found:
+            raise ValueError(f"Secret not found: {name}")
+        return found[0]
+
+    def get_secrets_list(self):
+        path = Path(__file__).parent / "secrets.yml"
+        with path.open() as f:
+            data = yaml.safe_load(f)
+        return [
+            Secret(
+                name=self.make_secret_name(raw["name"]),
+                managed=raw.get("managed", False),
+            )
+            for raw in data["secrets"]
+        ]
+
+
+@dataclasses.dataclass
+class Secret:
+    name: str
+    arn: str = ""
+    created: datetime | None = None
+    last_accessed: datetime | None = None
+    last_changed: datetime | None = None
+    value: str = ""
+    managed: bool = False
+
+    @classmethod
+    def from_dict(cls, data):
+        created = data.get("CreatedDate")
+        accessed = data.get("LastAccessedDate")
+        changed = data.get("LastChangedDate")
+        return cls(
+            arn=data["ARN"],
+            name=data["Name"],
+            created=datetime.fromisoformat(created) if created else None,
+            last_accessed=datetime.fromisoformat(accessed) if accessed else None,
+            last_changed=datetime.fromisoformat(changed) if changed else None,
+            value=data.get("SecretString"),
+        )
+
+    def table_row(self):
+        return [
+            self.name,
+            self.created.ctime() if self.created else "",
+            self.last_accessed.ctime() if self.last_accessed else "",
+            self.last_changed.ctime() if self.last_changed else "",
+        ]
+
+    def __str__(self):
+        return f"{self.name}"

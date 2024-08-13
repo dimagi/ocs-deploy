@@ -155,14 +155,16 @@ class FargateStack(cdk.Stack):
             # "AWS_SES_ACCESS_KEY":
             # "AWS_SES_REGION":
             # "AWS_SES_SECRET_KEY":
-            # "CRYPTOGRAPHY_SALT": ecs.Secret.from_secrets_manager(TODO)
-            # "SENTRY_DSN": ecs.Secret.from_secrets_manager(TODO)
-            # "SLACK_CLIENT_ID": ecs.Secret.from_secrets_manager(TODO)
-            # "SLACK_CLIENT_SECRET": ecs.Secret.from_secrets_manager(TODO)
-            # "SLACK_SIGNING_SECRET": ecs.Secret.from_secrets_manager(TODO)
-            # "TASKBADGER_API_KEY": ecs.Secret.from_secrets_manager(TODO)
-            # "TELEGRAM_SECRET_TOKEN": ecs.Secret.from_secrets_manager(TODO)
         }
+
+        for secret in config.get_secrets_list():
+            if secret.managed:
+                continue
+            secrets[secret.name.upper()] = ecs.Secret.from_secrets_manager(
+                secretsmanager.Secret.from_secret_name_v2(
+                    self, secret.name, secret.name
+                )
+            )
 
         image = ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest")
         django_task = ecs.FargateTaskDefinition(
@@ -202,6 +204,8 @@ class FargateStack(cdk.Stack):
                 condition=ecs.ContainerDependencyCondition.SUCCESS,
             )
         )
+
+        return django_task
 
     def _get_execution_role(self):
         """Task execution role with access to read from ECS"""

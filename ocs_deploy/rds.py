@@ -68,7 +68,7 @@ class RdsStack(cdk.Stack):
             storage_encrypted=True,
             credentials=rds.Credentials.from_generated_secret(
                 database_username,
-                secret_name=config.make_name("RdsCredentials"),
+                secret_name=config.make_secret_name("rds-credentials"),
             ),
             vpc=vpc,
             vpc_subnets=ec2.SubnetSelection(
