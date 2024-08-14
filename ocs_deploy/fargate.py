@@ -68,9 +68,6 @@ class FargateStack(cdk.Stack):
             cluster_name=config.make_name("Cluster"),
         )
 
-        task_definition, webserver_container = self._get_web_task_definition(
-            ecr_repo, config
-        )
         django_web_service = ecs_patterns.ApplicationLoadBalancedFargateService(
             self,
             config.make_name("FargateService"),
@@ -85,7 +82,7 @@ class FargateStack(cdk.Stack):
             certificate=domain_stack.certificate,
             redirect_http=True,
             protocol=elb.ApplicationProtocol.HTTPS,
-            task_definition=task_definition,
+            task_definition=self._get_web_task_definition(ecr_repo, config),
         )
 
         # Setup AutoScaling policy
@@ -114,7 +111,7 @@ class FargateStack(cdk.Stack):
             desired_count=1,
             service_name=config.make_name("Celery"),
             task_definition=self._get_celery_task_definition(
-                ecr_repo, config, webserver_container, is_beat=False
+                ecr_repo, config, is_beat=False
             ),
         )
 
@@ -126,7 +123,7 @@ class FargateStack(cdk.Stack):
             desired_count=1,
             service_name=config.make_name("CeleryBeat"),
             task_definition=self._get_celery_task_definition(
-                ecr_repo, config, webserver_container, is_beat=True
+                ecr_repo, config, is_beat=True
             ),
         )
 
@@ -175,11 +172,9 @@ class FargateStack(cdk.Stack):
             )
         )
 
-        return django_task, webserver_container
+        return django_task
 
-    def _get_celery_task_definition(
-        self, ecr_repo, config: OCSConfig, webserver_container, is_beat
-    ):
+    def _get_celery_task_definition(self, ecr_repo, config: OCSConfig, is_beat):
         log_driver = ecs.AwsLogDriver(stream_prefix=config.make_name())
 
         image = ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest")
@@ -199,7 +194,7 @@ class FargateStack(cdk.Stack):
             command = "celery -A gpt_playground worker -l INFO --pool gevent --concurrency 100".split(
                 " "
             )
-        celery_container = celery_task.add_container(
+        celery_task.add_container(
             id="celery",
             image=image,
             container_name="celery",
@@ -208,13 +203,6 @@ class FargateStack(cdk.Stack):
             secrets=self.secrets_dict,
             logging=log_driver,
             command=command,
-        )
-
-        celery_container.add_container_dependencies(
-            ecs.ContainerDependency(
-                container=webserver_container,
-                condition=ecs.ContainerDependencyCondition.START,
-            )
         )
 
         return celery_task
