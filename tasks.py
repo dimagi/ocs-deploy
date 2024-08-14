@@ -8,8 +8,12 @@ from ocs_deploy.config import OCSConfig, Secret
 
 DEFAULT_PROFILE = os.environ.get("AWS_PROFILE")
 
+PROFILE_HELP = {
+    "profile": "AWS profile to use for deployment. Will read from AWS_PROFILE env var if not set."
+}
 
-@task
+
+@task(help=PROFILE_HELP)
 def login(c: Context, profile=DEFAULT_PROFILE):
     result = c.run(f"aws sso login --profile {profile}", echo=True)
     return result.ok
@@ -31,8 +35,8 @@ def _check_auth(c: Context, profile: str):
 @task(
     help={
         "command": "Command to execute in the container. Defaults to '/bin/bash'",
-        "profile": "AWS profile to use for deployment. Will read from AWS_PROFILE env var if not set.",
     }
+    | PROFILE_HELP
 )
 def connect(c: Context, command="/bin/bash", profile=DEFAULT_PROFILE):
     """Connect to a running ECS container and execute the given command."""
@@ -70,8 +74,8 @@ def connect(c: Context, command="/bin/bash", profile=DEFAULT_PROFILE):
     help={
         "stacks": f"Comma-separated list of the stacks to deploy ({' | '.join(OCSConfig.ALL_STACKS)})",
         "verbose": "Enable verbose output",
-        "profile": "AWS profile to use for deployment. Will read from AWS_PROFILE env var if not set.",
     }
+    | PROFILE_HELP
 )
 def deploy(c: Context, stacks=None, verbose=False, profile=DEFAULT_PROFILE):
     profile = _get_profile_and_auth(c, profile)
@@ -100,7 +104,7 @@ def _get_profile_and_auth(c: Context, profile):
     return profile
 
 
-@task
+@task(help=PROFILE_HELP)
 def list_secrets(c: Context, profile=DEFAULT_PROFILE):
     config = _get_config()
     profile = _get_profile_and_auth(c, profile)
@@ -133,7 +137,7 @@ def _get_secrets(c, config, profile, name="", include_missing=True):
     return sorted(secrets, key=lambda s: s.name)
 
 
-@task
+@task(help={"name": "Name of the secret to retrieve"} | PROFILE_HELP)
 def get_secret_value(c: Context, name, profile=DEFAULT_PROFILE):
     config = _get_config()
     profile = _get_profile_and_auth(c, profile)
@@ -151,7 +155,13 @@ def get_secret_value(c: Context, name, profile=DEFAULT_PROFILE):
     print(f"Value: {secret.value}")
 
 
-@task
+@task(
+    help={
+        "name": "Name of the secret to set",
+        "value": "Value to set for the secret",
+    }
+    | PROFILE_HELP
+)
 def set_secret_value(c: Context, name, value, profile=DEFAULT_PROFILE):
     config = _get_config()
     profile = _get_profile_and_auth(c, profile)
@@ -186,7 +196,7 @@ def set_secret_value(c: Context, name, value, profile=DEFAULT_PROFILE):
         )
 
 
-@task
+@task(help={"name": "Name of the secret to delete"} | PROFILE_HELP)
 def delete_secret(c: Context, name, profile=DEFAULT_PROFILE):
     config = _get_config()
     profile = _get_profile_and_auth(c, profile)
@@ -206,8 +216,9 @@ def delete_secret(c: Context, name, profile=DEFAULT_PROFILE):
         )
 
 
-@task
+@task(help=PROFILE_HELP)
 def create_missing_secrets(c: Context, profile=DEFAULT_PROFILE):
+    """Iterate through secrets and prompt for each one that is missing."""
     config = _get_config()
     profile = _get_profile_and_auth(c, profile)
     secrets = _get_secrets(c, config, profile, include_missing=True)
