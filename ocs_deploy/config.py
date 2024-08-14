@@ -4,7 +4,6 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-import aws_cdk as cdk
 import yaml
 
 
@@ -56,6 +55,8 @@ class OCSConfig:
         return self.make_name(f"{name}-stack", include_region=True)
 
     def env(self):
+        import aws_cdk as cdk
+
         return cdk.Environment(account=os.getenv("CDK_ACCOUNT"), region=self.region)
 
     def make_name(self, name: str = "", include_region=False):
