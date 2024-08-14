@@ -22,6 +22,50 @@ def _check_credentials(c: Context, profile: str):
     return result.ok
 
 
+def _check_auth(c: Context, profile: str):
+    if not _check_credentials(c, profile):
+        if not login(c, profile):
+            raise Exit("Failed to login", -1)
+
+
+@task(
+    help={
+        "command": "Command to execute in the container. Defaults to '/bin/bash'",
+        "profile": "AWS profile to use for deployment. Will read from AWS_PROFILE env var if not set.",
+    }
+)
+def connect(c: Context, command="/bin/bash", profile=DEFAULT_PROFILE):
+    """Connect to a running ECS container and execute the given command."""
+    profile = _get_profile_and_auth(c, profile)
+
+    config = _get_config()
+    cluster = config.make_name("Cluster")
+    service = config.make_name("CeleryBeat")
+
+    result = c.run(
+        f"aws ecs list-tasks --cluster {cluster} --service {service}", hide=True
+    )
+    response = json.loads(result.stdout)
+    tasks = response.get("taskArns", [])
+    if not tasks:
+        raise Exit(
+            f"No tasks found for the '{service}' service in the '{cluster}' cluster.",
+            -1,
+        )
+
+    fargate_task = tasks[0]
+    container = "celery-beat"
+    c.run(
+        f"aws ecs execute-command "
+        f"--cluster {cluster} "
+        f"--task {fargate_task} "
+        f"--container {container} "
+        f"--command {command} "
+        f"--profile {profile} "
+        f"--interactive"
+    )
+
+
 @task(
     help={
         "stacks": f"Comma-separated list of the stacks to deploy ({' | '.join(OCSConfig.ALL_STACKS)})",
@@ -30,11 +74,7 @@ def _check_credentials(c: Context, profile: str):
     }
 )
 def deploy(c: Context, stacks=None, verbose=False, profile=DEFAULT_PROFILE):
-    profile = _get_profile(profile)
-
-    if not _check_credentials(c, profile):
-        if not login(c, profile):
-            raise Exit("Failed to login", -1)
+    profile = _get_profile_and_auth(c, profile)
 
     config = _get_config()
     cmd = f"cdk deploy --profile {profile}"
@@ -49,16 +89,21 @@ def deploy(c: Context, stacks=None, verbose=False, profile=DEFAULT_PROFILE):
     c.run(cmd, echo=True, pty=True)
 
 
-def _get_profile(profile):
+def _get_profile_and_auth(c: Context, profile):
     if not profile:
         profile = input("AWS profile not set. Enter profile: ")
+
+    if not _check_credentials(c, profile):
+        if not login(c, profile):
+            raise Exit("Failed to login", -1)
+
     return profile
 
 
 @task
 def list_secrets(c: Context, profile=DEFAULT_PROFILE):
     config = _get_config()
-    profile = _get_profile(profile)
+    profile = _get_profile_and_auth(c, profile)
     secrets = _get_secrets(c, config, profile, include_missing=True)
     rows = [secret.table_row() for secret in secrets]
     writer = TableWriter(["Name", "Created", "Last Accessed", "Last Changed"], rows)
@@ -91,7 +136,7 @@ def _get_secrets(c, config, profile, name="", include_missing=True):
 @task
 def get_secret_value(c: Context, name, profile=DEFAULT_PROFILE):
     config = _get_config()
-    profile = _get_profile(profile)
+    profile = _get_profile_and_auth(c, profile)
     prefix = config.make_secret_name("")
     if not name.startswith(prefix):
         name = config.make_secret_name(name)
@@ -109,7 +154,7 @@ def get_secret_value(c: Context, name, profile=DEFAULT_PROFILE):
 @task
 def set_secret_value(c: Context, name, value, profile=DEFAULT_PROFILE):
     config = _get_config()
-    profile = _get_profile(profile)
+    profile = _get_profile_and_auth(c, profile)
     try:
         secret = config.get_secret(name)
     except ValueError:
@@ -144,7 +189,7 @@ def set_secret_value(c: Context, name, value, profile=DEFAULT_PROFILE):
 @task
 def delete_secret(c: Context, name, profile=DEFAULT_PROFILE):
     config = _get_config()
-    profile = _get_profile(profile)
+    profile = _get_profile_and_auth(c, profile)
     secret = config.get_secret(name)
 
     if secret.managed:
@@ -164,7 +209,7 @@ def delete_secret(c: Context, name, profile=DEFAULT_PROFILE):
 @task
 def create_missing_secrets(c: Context, profile=DEFAULT_PROFILE):
     config = _get_config()
-    profile = _get_profile(profile)
+    profile = _get_profile_and_auth(c, profile)
     secrets = _get_secrets(c, config, profile, include_missing=True)
     for secret in secrets:
         if secret.created:
