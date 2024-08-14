@@ -58,6 +58,18 @@ class GithubOidcStack(cdk.Stack):
                     "ecr:UploadLayerPart",
                 ],
                 effect=iam.Effect.ALLOW,
+                resources=[
+                    f"arn:aws:ecr:{config.region}:{config.account}:repository/{config.ecr_repo_name}"
+                ],
+            )
+        )
+        role.add_to_policy(
+            iam.PolicyStatement(
+                sid="GetECRToken",
+                actions=[
+                    "ecr:GetAuthorizationToken",
+                ],
+                effect=iam.Effect.ALLOW,
                 resources=["*"],
             )
         )
@@ -68,6 +80,7 @@ class GithubOidcStack(cdk.Stack):
                 sid="RegisterTaskDefinition",
                 actions=[
                     "ecs:RegisterTaskDefinition",
+                    "ecs:DescribeTaskDefinition",
                 ],
                 effect=iam.Effect.ALLOW,
                 resources=["*"],
