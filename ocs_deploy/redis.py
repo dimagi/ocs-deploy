@@ -85,7 +85,7 @@ class RedisStack(cdk.Stack):
             ],
         )
 
-        redis_url = f"rediss://{self.redis_cluster.attr_redis_endpoint_address}:{self.redis_cluster.attr_redis_endpoint_port}"
+        redis_url = f"redis://{self.redis_cluster.attr_redis_endpoint_address}:{self.redis_cluster.attr_redis_endpoint_port}"
 
         self.redis_url_secret = secretsmanager.Secret(
             self,
