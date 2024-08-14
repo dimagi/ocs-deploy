@@ -8,6 +8,7 @@ import yaml
 
 
 class OCSConfig:
+    GITHUB_STACK = "github"
     DOMAINS_STACK = "domains"
     S3_STACK = "s3"
     VPC_STACK = "vpc"
@@ -17,6 +18,7 @@ class OCSConfig:
     DJANGO_STACK = "django"
 
     ALL_STACKS = [
+        GITHUB_STACK,
         DOMAINS_STACK,
         S3_STACK,
         VPC_STACK,
@@ -40,7 +42,6 @@ class OCSConfig:
             "MAINTENANCE_WINDOW", "Mon:00:00-Mon:03:00"
         )
 
-        self.azure_region = config.get("AZURE_REGION", "eastus")
         self.privacy_policy_url = config.get("PRIVACY_POLICY_URL", "")
         self.terms_url = config.get("TERMS_URL", "")
         self.signup_enabled = config.get("SIGNUP_ENABLED", "False")
@@ -48,6 +49,8 @@ class OCSConfig:
 
         self.taskbadger_org = config.get("TASKBADGER_ORG", "")
         self.taskbadger_project = config.get("TASKBADGER_PROJECT", "")
+
+        self.github_repo = config.get("GITHUB_REPO", "dimagi/open-chat-studio")
 
     def stack_name(self, name: str):
         if name not in self.ALL_STACKS:
@@ -84,8 +87,32 @@ class OCSConfig:
         return name
 
     @property
+    def ecs_cluster_name(self):
+        return self.make_name("Cluster")
+
+    @property
+    def ecs_django_service_name(self):
+        return self.make_name("Django")
+
+    @property
+    def ecs_celery_service_name(self):
+        return self.make_name("Celery")
+
+    @property
+    def ecs_celery_beat_service_name(self):
+        return self.make_name("CeleryBeat")
+
+    @property
     def ecr_repo_name(self):
         return self.make_name("ecr-repo")
+
+    @property
+    def ecs_task_role_name(self):
+        return self.make_name("ecs-task-role")
+
+    @property
+    def ecs_task_execution_role(self):
+        return self.make_name("ecs-task-execution-role")
 
     @property
     def redis_url_secrets_name(self):

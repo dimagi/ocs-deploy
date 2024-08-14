@@ -7,6 +7,7 @@ from ocs_deploy.config import OCSConfig
 from ocs_deploy.domains import DomainStack
 from ocs_deploy.ecr import EcrStack
 from ocs_deploy.fargate import FargateStack
+from ocs_deploy.github import GithubOidcStack
 from ocs_deploy.rds import RdsStack
 from ocs_deploy.redis import RedisStack
 from ocs_deploy.s3 import S3Stack
@@ -19,6 +20,7 @@ config = OCSConfig()
 app = cdk.App()
 
 S3Stack(app, config)
+GithubOidcStack(app, config)
 
 domain_stack = DomainStack(app, config)
 vpc_stack = VpcStack(app, config)

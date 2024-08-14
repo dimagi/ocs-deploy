@@ -65,7 +65,7 @@ class FargateStack(cdk.Stack):
             config.make_name("DeploymentCluster"),
             vpc=vpc,
             container_insights=True,
-            cluster_name=config.make_name("Cluster"),
+            cluster_name=config.ecs_cluster_name,
         )
 
         django_web_service = ecs_patterns.ApplicationLoadBalancedFargateService(
@@ -78,7 +78,7 @@ class FargateStack(cdk.Stack):
             desired_count=1,
             public_load_balancer=True,
             load_balancer_name=config.make_name("LoadBalancer"),
-            service_name=config.make_name("Django"),
+            service_name=config.ecs_django_service_name,
             certificate=self.domain_stack.certificate,
             redirect_http=True,
             protocol=elb.ApplicationProtocol.HTTPS,
@@ -108,7 +108,7 @@ class FargateStack(cdk.Stack):
             config.make_name("CeleryService"),
             cluster=cluster,
             desired_count=1,
-            service_name=config.make_name("Celery"),
+            service_name=config.ecs_celery_service_name,
             task_definition=self._get_celery_task_definition(
                 ecr_repo, config, is_beat=False
             ),
@@ -119,7 +119,7 @@ class FargateStack(cdk.Stack):
             config.make_name("CeleryBeatService"),
             cluster=cluster,
             desired_count=1,
-            service_name=config.make_name("CeleryBeat"),
+            service_name=config.ecs_celery_beat_service_name,
             task_definition=self._get_celery_task_definition(
                 ecr_repo, config, is_beat=True
             ),
@@ -142,6 +142,7 @@ class FargateStack(cdk.Stack):
             memory_limit_mib=512,
             execution_role=self.execution_role,
             task_role=self.task_role,
+            family=config.make_name("Django"),
         )
         migration_container = django_task.add_container(
             id="django_container",
@@ -200,6 +201,7 @@ class FargateStack(cdk.Stack):
             memory_limit_mib=512,
             execution_role=self.execution_role,
             task_role=self.task_role,
+            family=config.make_name(name),
         )
 
         if is_beat:
@@ -267,7 +269,6 @@ class FargateStack(cdk.Stack):
             "AWS_PRIVATE_STORAGE_BUCKET_NAME": self.config.s3_private_bucket_name,
             "AWS_PUBLIC_STORAGE_BUCKET_NAME": self.config.s3_public_bucket_name,
             "AWS_S3_REGION": self.config.region,
-            "AZURE_REGION": self.config.azure_region,
             "DJANGO_DATABASE_NAME": self.config.rds_db_name,
             "DJANGO_DATABASE_HOST": self.rds_stack.db_instance.instance_endpoint.hostname,
             "DJANGO_DATABASE_PORT": self.rds_stack.db_instance.db_instance_endpoint_port,
@@ -292,6 +293,7 @@ class FargateStack(cdk.Stack):
             self,
             "ecsTaskExecutionRole",
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+            role_name=self.config.ecs_task_execution_role,
         )
         # Add permissions to the Task Role
         execution_role.add_managed_policy(
@@ -323,6 +325,7 @@ class FargateStack(cdk.Stack):
             self,
             "ecsTaskRole",
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+            role_name=self.config.ecs_task_role_name,
         )
         task_role.add_to_policy(
             iam.PolicyStatement(

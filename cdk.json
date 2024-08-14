@@ -8,10 +8,15 @@
       "README.md",
       "cdk*.json",
       "requirements*.txt",
+      "requirements/*",
+      ".env",
+      ".env.example",
+      ".pre-commit-config.yaml",
       "source.bat",
       "**/__init__.py",
       "**/__pycache__",
-      "tests"
+      "tests",
+      "tasks*"
     ]
   },
   "context": {
