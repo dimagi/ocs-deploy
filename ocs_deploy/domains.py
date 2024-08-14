@@ -17,7 +17,7 @@ class DomainStack(cdk.Stack):
         )
 
         self.certificate = self.create_certificate(config)
-        self.create_email_identity(config)
+        self.email_identity = self.create_email_identity(config)
 
     def create_certificate(self, config):
         return acm.Certificate(
@@ -42,3 +42,5 @@ class DomainStack(cdk.Stack):
                 value=f"{record.name}.	1	IN	CNAME	{record.value}. ; SES for {config.domain_name}",
                 export_name=f"EmailIdentityDKIMRecord{i}",
             )
+
+        return email_identity

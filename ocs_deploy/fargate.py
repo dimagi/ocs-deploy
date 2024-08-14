@@ -6,6 +6,7 @@ from aws_cdk import (
     aws_ecs as ecs,
     aws_ecs_patterns as ecs_patterns,
     aws_iam as iam,
+    aws_logs as logs,
     aws_elasticloadbalancingv2 as elb,
     aws_secretsmanager as secretsmanager,
 )
@@ -43,12 +44,11 @@ class FargateStack(cdk.Stack):
         self.config = config
         self.rds_stack = rds_stack
         self.redis_stack = redis_stack
+        self.domain_stack = domain_stack
 
-        self.fargate_service = self.setup_fargate_service(
-            vpc, ecr_repo, domain_stack, config
-        )
+        self.fargate_service = self.setup_fargate_service(vpc, ecr_repo, config)
 
-    def setup_fargate_service(self, vpc, ecr_repo, domain_stack, config: OCSConfig):
+    def setup_fargate_service(self, vpc, ecr_repo, config: OCSConfig):
         http_sg = ec2.SecurityGroup(
             self, config.make_name("HttpSG"), vpc=vpc, allow_all_outbound=True
         )
@@ -70,7 +70,7 @@ class FargateStack(cdk.Stack):
 
         django_web_service = ecs_patterns.ApplicationLoadBalancedFargateService(
             self,
-            config.make_name("FargateService"),
+            config.make_name("DjangoWebService"),
             cluster=cluster,
             security_groups=[http_sg, https_sg],
             cpu=256,
@@ -79,7 +79,7 @@ class FargateStack(cdk.Stack):
             public_load_balancer=True,
             load_balancer_name=config.make_name("LoadBalancer"),
             service_name=config.make_name("Django"),
-            certificate=domain_stack.certificate,
+            certificate=self.domain_stack.certificate,
             redirect_http=True,
             protocol=elb.ApplicationProtocol.HTTPS,
             task_definition=self._get_web_task_definition(ecr_repo, config),
@@ -99,7 +99,7 @@ class FargateStack(cdk.Stack):
         # print out fargateService load balancer url
         cdk.CfnOutput(
             self,
-            config.make_name("FargateServiceLoadBalancerDNS"),
+            config.make_name("DjangoWebDNS"),
             value=django_web_service.load_balancer.load_balancer_dns_name,
         )
 
@@ -107,7 +107,6 @@ class FargateStack(cdk.Stack):
             self,
             config.make_name("CeleryService"),
             cluster=cluster,
-            # security_groups=[http_sg, https_sg],
             desired_count=1,
             service_name=config.make_name("Celery"),
             task_definition=self._get_celery_task_definition(
@@ -119,24 +118,26 @@ class FargateStack(cdk.Stack):
             self,
             config.make_name("CeleryBeatService"),
             cluster=cluster,
-            # security_groups=[http_sg, https_sg],
             desired_count=1,
             service_name=config.make_name("CeleryBeat"),
             task_definition=self._get_celery_task_definition(
                 ecr_repo, config, is_beat=True
             ),
+            enable_execute_command=True,
         )
 
         return django_web_service
 
     def _get_web_task_definition(self, ecr_repo, config: OCSConfig):
-        # create a task definition with CloudWatch Logs
-        log_driver = ecs.AwsLogDriver(stream_prefix=config.make_name())
+        log_group = self._get_log_group(config.make_name("DjangoLogs"))
+        log_driver = ecs.AwsLogDriver(
+            stream_prefix=config.make_name(), log_group=log_group
+        )
 
         image = ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest")
         django_task = ecs.FargateTaskDefinition(
             self,
-            id=config.make_name("DjangoMigrations"),
+            id=config.make_name("Django"),
             cpu=256,
             memory_limit_mib=512,
             execution_role=self.execution_role,
@@ -174,8 +175,21 @@ class FargateStack(cdk.Stack):
 
         return django_task
 
+    def _get_log_group(self, name):
+        return logs.LogGroup(
+            self,
+            name,
+            log_group_name=name,
+            removal_policy=cdk.RemovalPolicy.RETAIN,
+            retention=logs.RetentionDays.TWO_YEARS,
+        )
+
     def _get_celery_task_definition(self, ecr_repo, config: OCSConfig, is_beat):
-        log_driver = ecs.AwsLogDriver(stream_prefix=config.make_name())
+        log_group_name = "CeleryBeatLogs" if is_beat else "CeleryWorkerLogs"
+        log_group = self._get_log_group(config.make_name(log_group_name))
+        log_driver = ecs.AwsLogDriver(
+            stream_prefix=config.make_name(), log_group=log_group
+        )
 
         image = ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest")
         name = "CeleryBeatTask" if is_beat else "CeleryWorkerTask"
@@ -194,10 +208,12 @@ class FargateStack(cdk.Stack):
             command = "celery -A gpt_playground worker -l INFO --pool gevent --concurrency 100".split(
                 " "
             )
+
+        container_name = "celery-beat" if is_beat else "celery-worker"
         celery_task.add_container(
-            id="celery",
+            id=container_name,
             image=image,
-            container_name="celery",
+            container_name=container_name,
             essential=True,
             environment=self.env_dict,
             secrets=self.secrets_dict,
@@ -327,5 +343,20 @@ class FargateStack(cdk.Stack):
                 ],
             )
         )
-        # TODO: add ses policy
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "ses:SendEmail",
+                    "ses:SendRawEmail",
+                    "ses:SendBulkEmail",
+                ],
+                # conditions={
+                #     "StringLike": {
+                #         "ses:FromAddress": "noreply@dimagi.com"
+                #     }
+                # },
+                effect=iam.Effect.ALLOW,
+                resources=[self.domain_stack.email_identity.email_identity_arn],
+            )
+        )
         return task_role
