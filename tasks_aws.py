@@ -85,4 +85,6 @@ def deploy(c: Context, stacks=None, verbose=False, profile=DEFAULT_PROFILE):
         cmd += " --all"
     if verbose:
         cmd += " --verbose"
+
+    cmd += " --progress events"
     c.run(cmd, echo=True, pty=True)

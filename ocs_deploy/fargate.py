@@ -84,7 +84,7 @@ class FargateStack(cdk.Stack):
             protocol=elb.ApplicationProtocol.HTTPS,
             task_definition=self._get_web_task_definition(ecr_repo, config),
             enable_execute_command=True,
-            circuit_breaker=ecs.DeploymentCircuitBreaker(enabled=True, rollback=True),
+            circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
         )
 
         # Setup AutoScaling policy
@@ -115,7 +115,7 @@ class FargateStack(cdk.Stack):
                 ecr_repo, config, is_beat=False
             ),
             enable_execute_command=True,
-            circuit_breaker=ecs.DeploymentCircuitBreaker(enabled=True, rollback=True),
+            circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
         )
 
         ecs.FargateService(
@@ -128,7 +128,7 @@ class FargateStack(cdk.Stack):
                 ecr_repo, config, is_beat=True
             ),
             enable_execute_command=True,
-            circuit_breaker=ecs.DeploymentCircuitBreaker(enabled=True, rollback=True),
+            circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
             # we only ever want 1 beat service running
             max_healthy_percent=100,
             min_healthy_percent=0,
@@ -211,11 +211,10 @@ class FargateStack(cdk.Stack):
                 f"celery -A gpt_playground beat -l INFO --pidfile {pidfile}".split(" ")
             )
             container_name = "celery-beat"
-            # find the pidfile file and report success if it was modified less than 0.5 minutes, else fail
             health_check = ecs.HealthCheck(
                 command=[
                     "CMD-SHELL",
-                    f"/bin/sh -c '[ $(find {pidfile} -mmin -0.1 | wc -l) -eq 1 ] || false'",
+                    f"test -f {pidfile}",
                 ],
                 interval=cdk.Duration.seconds(30),
                 timeout=cdk.Duration.seconds(5),
@@ -231,7 +230,7 @@ class FargateStack(cdk.Stack):
             health_check = ecs.HealthCheck(
                 command=[
                     "CMD-SHELL",
-                    "celery inspect ping --destination celery@$HOSTNAME",
+                    "celery -A gpt_playground inspect ping --destination celery@$HOSTNAME",
                 ],
                 interval=cdk.Duration.seconds(30),
                 timeout=cdk.Duration.seconds(5),
