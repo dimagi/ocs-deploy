@@ -83,6 +83,7 @@ class FargateStack(cdk.Stack):
             redirect_http=True,
             protocol=elb.ApplicationProtocol.HTTPS,
             task_definition=self._get_web_task_definition(ecr_repo, config),
+            enable_execute_command=True,
         )
 
         # Setup AutoScaling policy
@@ -112,6 +113,7 @@ class FargateStack(cdk.Stack):
             task_definition=self._get_celery_task_definition(
                 ecr_repo, config, is_beat=False
             ),
+            enable_execute_command=True,
         )
 
         ecs.FargateService(
