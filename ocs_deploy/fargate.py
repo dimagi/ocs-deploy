@@ -197,14 +197,48 @@ class FargateStack(cdk.Stack):
         )
 
     def _get_celery_task_definition(self, ecr_repo, config: OCSConfig, is_beat):
-        log_group_name = "CeleryBeatLogs" if is_beat else "CeleryWorkerLogs"
+        if is_beat:
+            log_group_name = "CeleryBeatLogs"
+            name = "CeleryBeatTask"
+            pidfile = "/tmp/celerybeat.pid"
+            command = (
+                f"celery -A gpt_playground beat -l INFO --pidfile={pidfile}".split(" ")
+            )
+            container_name = "celery-beat"
+            # find the pidfile file and report success if it was modified less than 0.5 minutes, else fail
+            health_check = ecs.HealthCheck(
+                command=[
+                    "CMD-SHELL",
+                    f"/bin/sh -c '[ $(find {pidfile} -mmin -0.1 | wc -l) -eq 1 ] || false'",
+                ],
+                interval=cdk.Duration.seconds(30),
+                timeout=cdk.Duration.seconds(5),
+                retries=5,
+            )
+        else:
+            log_group_name = "CeleryWorkerLogs"
+            name = "CeleryWorkerTask"
+            command = "celery -A gpt_playground worker -l INFO --pool gevent --concurrency 100".split(
+                " "
+            )
+            container_name = "celery-worker"
+            health_check = ecs.HealthCheck(
+                command=[
+                    "CMD-SHELL",
+                    "celery inspect ping --destination celery@$$HOSTNAME",
+                ],
+                interval=cdk.Duration.seconds(30),
+                timeout=cdk.Duration.seconds(5),
+                retries=5,
+            )
+
         log_group = self._get_log_group(config.make_name(log_group_name))
         log_driver = ecs.AwsLogDriver(
             stream_prefix=config.make_name(), log_group=log_group
         )
 
         image = ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest")
-        name = "CeleryBeatTask" if is_beat else "CeleryWorkerTask"
+
         celery_task = ecs.FargateTaskDefinition(
             self,
             id=config.make_name(name),
@@ -215,14 +249,6 @@ class FargateStack(cdk.Stack):
             family=config.make_name(name),
         )
 
-        if is_beat:
-            command = "celery -A gpt_playground beat -l INFO".split(" ")
-        else:
-            command = "celery -A gpt_playground worker -l INFO --pool gevent --concurrency 100".split(
-                " "
-            )
-
-        container_name = "celery-beat" if is_beat else "celery-worker"
         celery_task.add_container(
             id=container_name,
             image=image,
@@ -232,6 +258,7 @@ class FargateStack(cdk.Stack):
             secrets=self.secrets_dict,
             logging=log_driver,
             command=command,
+            health_check=health_check,
         )
 
         return celery_task
