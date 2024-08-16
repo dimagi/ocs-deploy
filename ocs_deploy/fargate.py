@@ -84,6 +84,7 @@ class FargateStack(cdk.Stack):
             protocol=elb.ApplicationProtocol.HTTPS,
             task_definition=self._get_web_task_definition(ecr_repo, config),
             enable_execute_command=True,
+            circuit_breaker=ecs.DeploymentCircuitBreaker(enabled=True, rollback=True),
         )
 
         # Setup AutoScaling policy
@@ -114,6 +115,7 @@ class FargateStack(cdk.Stack):
                 ecr_repo, config, is_beat=False
             ),
             enable_execute_command=True,
+            circuit_breaker=ecs.DeploymentCircuitBreaker(enabled=True, rollback=True),
         )
 
         ecs.FargateService(
@@ -126,6 +128,10 @@ class FargateStack(cdk.Stack):
                 ecr_repo, config, is_beat=True
             ),
             enable_execute_command=True,
+            circuit_breaker=ecs.DeploymentCircuitBreaker(enabled=True, rollback=True),
+            # we only ever want 1 beat service running
+            max_healthy_percent=100,
+            min_healthy_percent=0,
         )
 
         return django_web_service
@@ -174,7 +180,7 @@ class FargateStack(cdk.Stack):
                 ],
                 interval=cdk.Duration.seconds(30),
                 timeout=cdk.Duration.seconds(5),
-                retries=5,
+                retries=4,
             ),
         )
 
@@ -202,7 +208,7 @@ class FargateStack(cdk.Stack):
             name = "CeleryBeatTask"
             pidfile = "/tmp/celerybeat.pid"
             command = (
-                f"celery -A gpt_playground beat -l INFO --pidfile={pidfile}".split(" ")
+                f"celery -A gpt_playground beat -l INFO --pidfile {pidfile}".split(" ")
             )
             container_name = "celery-beat"
             # find the pidfile file and report success if it was modified less than 0.5 minutes, else fail
@@ -213,7 +219,7 @@ class FargateStack(cdk.Stack):
                 ],
                 interval=cdk.Duration.seconds(30),
                 timeout=cdk.Duration.seconds(5),
-                retries=5,
+                retries=4,
             )
         else:
             log_group_name = "CeleryWorkerLogs"
@@ -225,11 +231,11 @@ class FargateStack(cdk.Stack):
             health_check = ecs.HealthCheck(
                 command=[
                     "CMD-SHELL",
-                    "celery inspect ping --destination celery@$$HOSTNAME",
+                    "celery inspect ping --destination celery@$HOSTNAME",
                 ],
                 interval=cdk.Duration.seconds(30),
                 timeout=cdk.Duration.seconds(5),
-                retries=5,
+                retries=4,
             )
 
         log_group = self._get_log_group(config.make_name(log_group_name))
