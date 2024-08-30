@@ -51,7 +51,9 @@ class GithubOidcStack(cdk.Stack):
             iam.PolicyStatement(
                 sid="PushToECR",
                 actions=[
+                    "ecr:BatchGetImage",
                     "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
                     "ecr:CompleteLayerUpload",
                     "ecr:InitiateLayerUpload",
                     "ecr:PutImage",
