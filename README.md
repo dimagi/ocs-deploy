@@ -106,7 +106,7 @@ Steps:
     ```
 
    * Create the DNS entries for the domain and email domain verification
-   * The CNAME records will be included in the stack
+   * The CNAME records will be included in the stack output
 
 5. Create the necessary secrets
 
