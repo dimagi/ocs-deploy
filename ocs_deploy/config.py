@@ -195,3 +195,7 @@ class Secret:
 
     def __str__(self):
         return f"{self.name}"
+
+    @property
+    def env_var(self):
+        return self.name.split("/")[-1].upper()

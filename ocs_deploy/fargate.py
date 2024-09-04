@@ -298,7 +298,7 @@ class FargateStack(cdk.Stack):
         for secret in self.config.get_secrets_list():
             if secret.managed:
                 continue
-            secrets[secret.name.upper()] = ecs.Secret.from_secrets_manager(
+            secrets[secret.env_var] = ecs.Secret.from_secrets_manager(
                 secretsmanager.Secret.from_secret_name_v2(
                     self, secret.name, secret.name
                 )
