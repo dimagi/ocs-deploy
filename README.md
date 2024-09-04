@@ -134,3 +134,35 @@ To connect to the running service, you can use the `inv connect` command to run 
 inv connect  # the default command is /bin/bash
 inv connect --command "python manage.py shell"
 ```
+
+## Adding a new environment variable
+
+The Django services require certain environment variables to be set. These can be either non-secret or secret environment variables.
+
+### A non-secret environment variable
+
+To add a non-secret environment variable:
+
+1. Add the environment variable to `.env` and `.env.example` files.
+2. Update the `ocs_deploy.config.OCSConfig` class to include the new environment variable.
+3. Update the `ocs_deploy/fargate.py` file to include the new environment variable in the `env_dict` method.
+
+Having completed this you can update the Django service to make the new environment variable available:
+
+```shell
+inv aws.deploy -s django
+```
+
+### A secret environment variable
+
+To add a secret to the Secrets Manager, first add the secret name to the `ocs_deploy/secrets.yml` file. Then run:
+
+```shell
+inv secrets.set SECRET_NAME SECRET_VALUE
+```
+
+After setting the secret value you can update the Django service include the new secret as an environment variable:
+
+```shell
+inv aws.deploy -s django
+```
