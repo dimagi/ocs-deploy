@@ -68,10 +68,13 @@ def connect(c: Context, command="/bin/bash", service="django", profile=DEFAULT_P
     help={
         "stacks": f"Comma-separated list of the stacks to deploy ({' | '.join(OCSConfig.ALL_STACKS)})",
         "verbose": "Enable verbose output",
+        "maintenance": "Enable maintenance mode",
     }
     | PROFILE_HELP
 )
-def deploy(c: Context, stacks=None, verbose=False, profile=DEFAULT_PROFILE):
+def deploy(
+    c: Context, stacks=None, verbose=False, profile=DEFAULT_PROFILE, maintenance=False
+):
     """Deploy the specified stacks. If no stacks are specified, all stacks will be deployed."""
     profile = get_profile_and_auth(c, profile)
 
@@ -86,5 +89,48 @@ def deploy(c: Context, stacks=None, verbose=False, profile=DEFAULT_PROFILE):
     if verbose:
         cmd += " --verbose"
 
+    if maintenance:
+        cmd += " --context maintenance_mode=true"
+
     cmd += " --progress events"
     c.run(cmd, echo=True, pty=True)
+
+
+@task(
+    help={
+        "stacks": f"Comma-separated list of the stacks to deploy ({' | '.join(OCSConfig.ALL_STACKS)})",
+        "verbose": "Enable verbose output",
+        "maintenance": "Enable maintenance mode",
+    }
+    | PROFILE_HELP
+)
+def diff(
+    c: Context, stacks=None, verbose=False, profile=DEFAULT_PROFILE, maintenance=False
+):
+    """Deploy the specified stacks. If no stacks are specified, all stacks will be deployed."""
+    profile = get_profile_and_auth(c, profile)
+
+    config = _get_config()
+    cmd = f"cdk diff --profile {profile}"
+    if stacks:
+        stacks = " ".join([config.stack_name(stack) for stack in stacks.split(",")])
+        cmd += f" {stacks}"
+    else:
+        cmd += " --all"
+    if verbose:
+        cmd += " --verbose"
+
+    cmd += _check_maintenance_mode(maintenance)
+
+    c.run(cmd, echo=True, pty=True)
+
+
+def _check_maintenance_mode(maintenance_mode):
+    if maintenance_mode:
+        confirm(
+            "Maintenance mode is enabled. This will stop all service. Continue ?",
+            _exit=True,
+            exit_message="Aborted",
+        )
+
+    return " --context maintenance_mode=true" if maintenance_mode else ""
