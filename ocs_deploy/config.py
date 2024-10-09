@@ -9,6 +9,7 @@ import yaml
 
 class OCSConfig:
     GITHUB_STACK = "github"
+    EC2_TMP_STACK = "ec2tmp"
     DOMAINS_STACK = "domains"
     S3_STACK = "s3"
     VPC_STACK = "vpc"
@@ -19,6 +20,7 @@ class OCSConfig:
 
     ALL_STACKS = [
         GITHUB_STACK,
+        EC2_TMP_STACK,
         DOMAINS_STACK,
         S3_STACK,
         VPC_STACK,

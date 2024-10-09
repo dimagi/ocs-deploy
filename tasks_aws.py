@@ -15,7 +15,7 @@ from tasks_utils import confirm
 @task(
     help={
         "command": "Command to execute in the container. Defaults to '/bin/bash'",
-        "service": "Service to connect to. One of [django, celery, beat]. Defaults to 'django'",
+        "service": "Service to connect to. One of [django, celery, beat, ec2tmp]. Defaults to 'django'",
     }
     | PROFILE_HELP
 )
@@ -23,6 +23,32 @@ def connect(c: Context, command="/bin/bash", service="django", profile=DEFAULT_P
     """Connect to a running ECS container and execute the given command."""
     profile = get_profile_and_auth(c, profile)
 
+    if service == "ec2tmp":
+        config = _get_config()
+        stack = config.stack_name(OCSConfig.EC2_TMP_STACK)
+        name = config.make_name("TmpInstance")
+        filters = f"--filters Name=tag:Name,Values={stack}/{name}"
+        query = "--query 'Reservations[*].Instances[*].[InstanceId]'"
+        result = c.run(
+            f"aws ec2 describe-instances --output text {filters} {query}", hide=True
+        )
+        instances = result.stdout.strip().split()
+        if not instances:
+            raise Exit(
+                f"No instances of {service} were found.",
+                -1,
+            )
+        c.run(
+            "aws ssm start-session --target " + instances[0],
+            echo=True,
+            pty=True,
+        )
+
+    else:
+        _fargate_connect(c, command, service, profile)
+
+
+def _fargate_connect(c: Context, command, service, profile):
     config = _get_config()
     cluster = config.make_name("Cluster")
     match service:

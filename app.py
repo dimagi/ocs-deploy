@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 from ocs_deploy.config import OCSConfig
 from ocs_deploy.domains import DomainStack
+from ocs_deploy.ec2_tmp import Ec2TmpStack
 from ocs_deploy.ecr import EcrStack
 from ocs_deploy.fargate import FargateStack
 from ocs_deploy.github import GithubOidcStack
@@ -24,6 +25,9 @@ GithubOidcStack(app, config)
 
 domain_stack = DomainStack(app, config)
 vpc_stack = VpcStack(app, config)
+
+ec2_tmp_stack = Ec2TmpStack(app, vpc_stack.vpc, config)
+
 ecr_stack = EcrStack(app, config)
 
 rds_stack = RdsStack(app, vpc_stack.vpc, config)
