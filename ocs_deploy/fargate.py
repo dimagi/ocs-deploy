@@ -388,8 +388,11 @@ class FargateStack(cdk.Stack):
                 ],
                 effect=iam.Effect.ALLOW,
                 resources=[
+                    f"arn:aws:s3:::{self.config.s3_private_bucket_name}",
                     f"arn:aws:s3:::{self.config.s3_private_bucket_name}/*",
+                    f"arn:aws:s3:::{self.config.s3_public_bucket_name}",
                     f"arn:aws:s3:::{self.config.s3_public_bucket_name}/*",
+                    f"arn:aws:s3:::{self.config.s3_whatsapp_audio_bucket}",
                     f"arn:aws:s3:::{self.config.s3_whatsapp_audio_bucket}/*",
                 ],
             )
