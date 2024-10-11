@@ -95,7 +95,7 @@ def set_secret_value(c: Context, name, value, profile=DEFAULT_PROFILE):
             exit_message="Aborted",
         )
 
-    if existing:
+    if not existing:
         confirm(f"Create secret: {name} ?", _exit=True, exit_message="Aborted")
         c.run(
             f"aws secretsmanager create-secret --name {name} --secret-string '{value}' --profile {profile}",
