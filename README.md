@@ -60,8 +60,9 @@ Assumptions:
 
 * You have an AWS Account with the necessary permissions and SSO configured
 * `export AWS_PROFILE=XXX` is set
-* SSO credentials are set up (`aws sso login`)
+* SSO credentials are set up (`aws configure sso`)
 * You have the necessary permissions to create the resources in the account
+* If this is a new environment run `ocs --env <env> aws.bootstrap` to set up the AWS account for CDK
 
 Steps:
 

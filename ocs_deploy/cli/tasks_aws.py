@@ -151,6 +151,22 @@ def diff(
     c.run(cmd, echo=True, pty=True)
 
 
+@task
+def bootstrap(c: Context, profile=DEFAULT_PROFILE):
+    """Bootstrap the AWS environment.
+
+    This only needs to be run once per AWS account.
+    """
+    profile = get_profile_and_auth(c, profile)
+
+    config = _get_config(c)
+    c.run(
+        f"cdk bootstrap --profile {profile} --context ocs_env={config.environment}",
+        echo=True,
+        pty=True,
+    )
+
+
 def _check_maintenance_mode(maintenance_mode):
     if maintenance_mode:
         confirm(
