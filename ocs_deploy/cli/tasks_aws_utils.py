@@ -2,6 +2,7 @@ import os
 
 from dotenv import dotenv_values
 from invoke import Context, Exit, task
+from termcolor import cprint
 
 from ocs_deploy.config import OCSConfig
 
@@ -37,5 +38,12 @@ def get_profile_and_auth(c: Context, profile):
     return profile
 
 
-def _get_config():
-    return OCSConfig(dotenv_values(".env"))
+def _get_config(c: Context):
+    env = c.config.environment
+    if not env:
+        raise Exit(
+            "No environment specified. Use '--env' or the 'OCS_DEPLOY_ENV' environment variable.",
+            -1,
+        )
+    cprint(f"Using environment: {env}", color="blue")
+    return OCSConfig(dotenv_values(f".env.{env}"))

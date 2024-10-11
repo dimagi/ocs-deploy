@@ -3,19 +3,19 @@ import json
 from invoke import Context, Exit, task
 
 from ocs_deploy.config import Secret
-from tasks_aws_utils import (
+from ocs_deploy.cli.tasks_aws_utils import (
     DEFAULT_PROFILE,
     PROFILE_HELP,
     _get_config,
     get_profile_and_auth,
 )
-from tasks_utils import confirm
+from ocs_deploy.cli.tasks_utils import confirm
 
 
 @task(name="list", help=PROFILE_HELP)
 def list_secrets(c: Context, profile=DEFAULT_PROFILE):
     """List all secrets."""
-    config = _get_config()
+    config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
     secrets = _get_secrets(c, config, profile, include_missing=True)
     rows = [secret.table_row() for secret in secrets]
@@ -49,7 +49,7 @@ def _get_secrets(c, config, profile, name="", include_missing=True):
 @task(name="get", help={"name": "Name of the secret to retrieve"} | PROFILE_HELP)
 def get_secret_value(c: Context, name, profile=DEFAULT_PROFILE):
     """Get a secret value by name."""
-    config = _get_config()
+    config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
     prefix = config.make_secret_name("")
     if not name.startswith(prefix):
@@ -75,7 +75,7 @@ def get_secret_value(c: Context, name, profile=DEFAULT_PROFILE):
 )
 def set_secret_value(c: Context, name, value, profile=DEFAULT_PROFILE):
     """Set a secret value by name."""
-    config = _get_config()
+    config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
     try:
         secret = config.get_secret(name)
@@ -111,7 +111,7 @@ def set_secret_value(c: Context, name, value, profile=DEFAULT_PROFILE):
 @task(name="delete", help={"name": "Name of the secret to delete"} | PROFILE_HELP)
 def delete_secret(c: Context, name, profile=DEFAULT_PROFILE):
     """Delete a secret by name."""
-    config = _get_config()
+    config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
     secret = config.get_secret(name)
 
@@ -132,7 +132,7 @@ def delete_secret(c: Context, name, profile=DEFAULT_PROFILE):
 @task(name="create-missing", help=PROFILE_HELP)
 def create_missing_secrets(c: Context, profile=DEFAULT_PROFILE):
     """Iterate through secrets and prompt for each one that is missing."""
-    config = _get_config()
+    config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
     secrets = _get_secrets(c, config, profile, include_missing=True)
     for secret in secrets:

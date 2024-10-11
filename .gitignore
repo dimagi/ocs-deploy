@@ -9,5 +9,6 @@ __pycache__
 .cdk.staging
 cdk.out
 .idea
-.env
+.env*
+!.env.example
 cdk.context.json

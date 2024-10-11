@@ -3,13 +3,13 @@ import json
 from invoke import Context, Exit, task
 
 from ocs_deploy.config import OCSConfig
-from tasks_aws_utils import (
+from ocs_deploy.cli.tasks_aws_utils import (
     DEFAULT_PROFILE,
     PROFILE_HELP,
     _get_config,
     get_profile_and_auth,
 )
-from tasks_utils import confirm
+from ocs_deploy.cli.tasks_utils import confirm
 
 
 @task(
@@ -24,7 +24,7 @@ def connect(c: Context, command="/bin/bash", service="django", profile=DEFAULT_P
     profile = get_profile_and_auth(c, profile)
 
     if service == "ec2tmp":
-        config = _get_config()
+        config = _get_config(c)
         stack = config.stack_name(OCSConfig.EC2_TMP_STACK)
         name = config.make_name("TmpInstance")
         filters = f"--filters Name=tag:Name,Values={stack}/{name}"
@@ -49,7 +49,7 @@ def connect(c: Context, command="/bin/bash", service="django", profile=DEFAULT_P
 
 
 def _fargate_connect(c: Context, command, service, profile):
-    config = _get_config()
+    config = _get_config(c)
     cluster = config.make_name("Cluster")
     match service:
         case "django":
@@ -104,7 +104,7 @@ def deploy(
     """Deploy the specified stacks. If no stacks are specified, all stacks will be deployed."""
     profile = get_profile_and_auth(c, profile)
 
-    config = _get_config()
+    config = _get_config(c)
     cmd = f"cdk deploy --profile {profile}"
     if stacks:
         stacks = " ".join([config.stack_name(stack) for stack in stacks.split(",")])
@@ -136,7 +136,7 @@ def diff(
     """Deploy the specified stacks. If no stacks are specified, all stacks will be deployed."""
     profile = get_profile_and_auth(c, profile)
 
-    config = _get_config()
+    config = _get_config(c)
     cmd = f"cdk diff --profile {profile}"
     if stacks:
         stacks = " ".join([config.stack_name(stack) for stack in stacks.split(",")])

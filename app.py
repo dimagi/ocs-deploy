@@ -14,11 +14,15 @@ from ocs_deploy.redis import RedisStack
 from ocs_deploy.s3 import S3Stack
 from ocs_deploy.vpc import VpcStack
 
-load_dotenv(".env")
+app = cdk.App()
+env = app.node.try_get_context("env")
+if not env:
+    raise Exception("No environment specified")
+
+load_dotenv(f".env.{env}")
 
 config = OCSConfig()
 
-app = cdk.App()
 
 S3Stack(app, config)
 GithubOidcStack(app, config)
