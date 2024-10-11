@@ -1,158 +1,196 @@
 # Open Chat Studio CDK Deploy
 
-This project contains the CDK stack for deploying the [Open Chat Studio](https://github.com/dimagi/open-chat-studio/)
-infrastructure.
+This project contains the AWS Cloud Development Kit (CDK) stack for deploying the 
+[Open Chat Studio](https://github.com/dimagi/open-chat-studio/) infrastructure.
 
-The rough architecture is as follows:
+## Table of Contents
+1. [Architecture Overview](#architecture-overview)
+2. [Project Structure](#project-structure)
+3. [Quickstart](#quickstart)
+4. [First Time Deployment Steps](#first-time-deployment-steps)
+5. [Steady State Deployment Steps](#steady-state-deployment-steps)
+6. [Connecting to Running Services](#connecting-to-running-services)
+7. [Adding Environment Variables](#adding-environment-variables)
+8. [Other Useful CDK Commands](#other-useful-cdk-commands)
+9. [Troubleshooting](#troubleshooting)
 
-* RDS PostgreSQL database
-* Elasticache Redis
-* Elastic Container Registry (ECR)
-* ECS Fargate service for the Django application
-  * Django web service
-    * This service has two containers, one to run Django migrations and the other to run the Gunicorn server.
-      The migrations container runs first and then the Gunicorn container is started once it has completed.
-    * The Django service is behind an ALB and has a target group for health checks
-  * Celery worker service
-  * Celery beat service
+## Architecture Overview
 
-In addition to the above services, this project also sets up the following:
+The architecture consists of various AWS components:
 
-* VPC with public and private subnets
-* Load balancer for the Django service
-* S3 buckets for media files
-* Certificate Manager certificates for the domain
-* Email identity verification for the domain
-* GitHub Actions roles for the CI/CD pipeline
-* Secrets Manager for storing the Django secrets
+- **RDS PostgreSQL** database
+- **Elasticache Redis**
+- **Elastic Container Registry (ECR)**
+- **ECS Fargate** services for the Django application, including:
+  - **Django web service**:
+    - Runs two containers: one for executing migrations and another for running the Gunicorn server.
+    - The migrations container runs first and the Gunicorn container starts afterward.
+    - The service is behind an Application Load Balancer (ALB) with a health check target group.
+  - **Celery worker service**
+  - **Celery beat service**
 
-## Project Layout
+Additional components set up by this project include:
 
-* `ocs_deploy/cli/*.py` - Invoke tasks for deploying the CDK stacks, managing secrets etc
-  * Run `ocs -l` to see the available tasks
-* `cdk.json` file tells the CDK Toolkit how to execute the app
-* `ocs_deploy/` directory contains the CDK stack definitions
+- VPC with public and private subnets
+- Load balancer for the Django service
+- S3 buckets for media files
+- Certificate Manager certificates for domain management
+- Email identity verification for the domain
+- GitHub Actions roles for the CI/CD pipeline
+- Secrets Manager for storing Django secrets
+
+## Project Structure
+
+This section describes the layout of the project:
+
+- `ocs_deploy/cli/*.py`: Scripts for deploying CDK stacks and managing secrets.
+  - Run `ocs -l` to see available tasks.
+- `cdk.json`: Configuration file for the CDK Toolkit.
+- `ocs_deploy/`: Contains the CDK stack definitions.
 
 ## Quickstart
 
-This assumes you already have `uv` [installed](https://docs.astral.sh/uv/getting-started/installation/).
+This guide assumes you have [uv](https://docs.astral.sh/uv/getting-started/installation/) installed.
 
-### 1. Set up the tools
+### 1. Set Up the Tools
 
-```shell
+```bash
 $ uv venv
 $ uv pip install -e .
 $ source .venv/bin/activate
 $ ocs -l
 ```
 
-### 2. Create your configuration
+### 2. Create Your Configuration
 
-```shell
+```bash
 $ ocs init <env>
 ```
 
-Now edit the `.env.{env name}` file to set the necessary configuration.
+Edit the generated `.env.{env name}` file to set your required configurations.
 
-## First time deploy steps
+## First Time Deployment Steps
 
-Assumptions:
+### Prerequisites
 
-* You have an AWS Account with the necessary permissions and SSO configured
-* `export AWS_PROFILE=XXX` is set
-* SSO credentials are set up (`aws configure sso`)
-* You have the necessary permissions to create the resources in the account
-* If this is a new environment run `ocs --env <env> aws.bootstrap` to set up the AWS account for CDK
+- You have an AWS account with the necessary permissions and configured SSO.
+- You have the correct AWS profile set:
+  ```bash
+  export AWS_PROFILE=XXX
+  ```
+- SSO credentials are configured (`aws configure sso`).
+- You have permissions to create resources in the account.
+- For new environments, run:
+  ```bash
+  ocs --env <env> aws.bootstrap
+  ```
 
-Steps:
+### Deployment Steps
 
-1. Set up the ECR repository
+1. **Set Up the ECR Repository**
 
-    ```shell
+    ```bash
     ocs --env <env> aws.deploy -s ecr -v
     ```
 
-    Now push the initial version of the Docker image to the registry. This is needed to create the ECS service.
-    See https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html
-       
-2. Set up RDS, Redis, S3
+    Next, push the initial version of the Docker image to the registry:
 
-    ```shell
-    ocs --env <env> aws.deploy -s rds,redis,s3 -v
+    ```bash
+    export AWS_ACCOUNT_ID=xxx \
+      && export AWS_REGION=us-east-1 \
+      && export OCS_ENV=<env> \
+      && export OCS_NAME=<name> \
+      && export REGISTRY=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com \
+      && export IMAGE=$REGISTRY/$OCS_NAME-$OCS_ENV-ecr-repo
+    docker build . -t "$IMAGE:latest" -f Dockerfile.web
+    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REGISTRY
+    docker push "$IMAGE" --all-tags
     ```
-   
-3. Set up the domains, github roles etc.
 
-    ```shell
-    ocs --env <env> aws.deploy -s domains,github -v
+    For more details on Docker image pushing, visit the [AWS ECR documentation](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html).
+
+2. **Set Up RDS, Redis, and S3**
+
+    ```bash
+    ocs --env <env> aws.deploy --stacks rds,redis,s3
     ```
 
-   * Create the DNS entries for the domain and email domain verification
-   * The CNAME records will be included in the stack output
+3. **Set Up Domains and GitHub Roles**
 
-4. Create the necessary secrets
+    ```bash
+    ocs --env <env> aws.deploy --stacks domains,github
+    ```
+   - Create DNS entries for domain and email domain verification.
+   - CNAME records will be provided in the stack output.
 
-    ```shell
+4. **Create Necessary Secrets**
+
+    ```bash
     ocs --env <env> secrets.create-missing
     ```
 
-5. Set up the Django service
+5. **Set Up the Django Service**
 
-    ```shell
-    ocs --env <env> aws.deploy -s django -v
+    ```bash
+    ocs --env <env> aws.deploy --stacks django
     ```
-   
-## Steady state deploy steps
 
-After the initial deploy, you can deploy any stack independently. Typically, you would only need to 
-run the CDK deploy when changing the infrastructure. For code deploys you can use the GitHub Actions defined
-in the [Open Chat Studio](https://github.com/dimagi/open-chat-studio/) repository.
+## Steady State Deployment Steps
 
-## Connecting to a running service
+After the initial deployment, you can deploy any stack independently. Typically, you will only run the CDK deploy when changing infrastructure. For code deployments, use the GitHub Actions defined in the [Open Chat Studio](https://github.com/dimagi/open-chat-studio/) repository.
 
-To connect to the running service, you can use the `ocs connect` command to run a command or get a shell:
+## Connecting to Running Services
 
-```shell
-ocs --env <env> connect  # the default command is /bin/bash
+To connect to a running service, use the `ocs connect` command:
+
+```bash
+ocs --env <env> connect  # Default command is /bin/bash
 ocs --env <env> connect --command "python manage.py shell"
 ```
 
-## Adding a new environment variable
+## Adding Environment Variables
 
-The Django services require certain environment variables to be set. These can be either non-secret or secret environment variables.
+### Non-Secret Environment Variable
 
-### A non-secret environment variable
+1. Add the variable to `.env.<env>` and `.env.example`.
+2. Update the `ocs_deploy.config.OCSConfig` class with the new variable.
+3. Update the `ocs_deploy/fargate.py` file to include the variable in the `env_dict` method.
 
-To add a non-secret environment variable:
+Deploy the Django service to apply changes:
 
-1. Add the environment variable to `.env.<env>` and `.env.example` files.
-2. Update the `ocs_deploy.config.OCSConfig` class to include the new environment variable.
-3. Update the `ocs_deploy/fargate.py` file to include the new environment variable in the `env_dict` method.
-
-Having completed this you can update the Django service to make the new environment variable available:
-
-```shell
-ocs --env <env> aws.deploy -s django
+```bash
+ocs --env <env> aws.deploy --stacks django
 ```
 
-### A secret environment variable
+### Secret Environment Variable
 
-To add a secret to the Secrets Manager, first add the secret name to the `ocs_deploy/secrets.yml` file. Then run:
+1. Add the secret's name to the `ocs_deploy/secrets.yml`.
+2. Set the secret value:
 
-```shell
-ocs --env <env> secrets.set SECRET_NAME SECRET_VALUE
+    ```bash
+    ocs --env <env> secrets.set SECRET_NAME SECRET_VALUE
+    ```
+
+After setting, deploy the Django service to include the new secret:
+
+```bash
+ocs --env <env> aws.deploy --stack django
 ```
 
-After setting the secret value you can update the Django service include the new secret as an environment variable:
+## Other Useful CDK Commands
 
-```shell
-ocs --env <env> aws.deploy -s django
-```
+- `cdk ls`: List all stacks in the app.
+- `cdk synth`: Emit the synthesized CloudFormation template.
+- `cdk deploy`: Deploy the stack to your default AWS account/region.
+- `cdk diff`: Compare the deployed stack with the current state.
+- `cdk docs`: Open CDK documentation.
 
-## Other Useful CDK commands
+## Troubleshooting
 
- * `cdk ls`          list all stacks in the app
- * `cdk synth`       emits the synthesized CloudFormation template
- * `cdk deploy`      deploy this stack to your default AWS account/region
- * `cdk diff`        compare deployed stack with current state
- * `cdk docs`        open CDK documentation
+**Common Issues**
+
+1. **AWS Credentials Not Set**: Ensure that your AWS credentials are correctly configured and that AWS_PROFILE is set.
+2. **Docker Login Issues**: If you encounter issues with Docker login, ensure that you are using the correct AWS region and account ID.
+3. **Secrets Not Found** : If a secret is not found, ensure that it is correctly defined in the secrets.yml file and that it has been created in AWS Secrets Manager.
+4. 
+For more detailed troubleshooting, refer to the [AWS CDK documentation](https://docs.aws.amazon.com/cdk/latest/guide/troubleshooting.html).
