@@ -109,7 +109,7 @@ def set_secret_value(c: Context, name, value, profile=DEFAULT_PROFILE):
 
 
 @task(name="delete", help={"name": "Name of the secret to delete"} | PROFILE_HELP)
-def delete_secret(c: Context, name, profile=DEFAULT_PROFILE):
+def delete_secret(c: Context, name, profile=DEFAULT_PROFILE, force=False):
     """Delete a secret by name."""
     config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
@@ -122,9 +122,12 @@ def delete_secret(c: Context, name, profile=DEFAULT_PROFILE):
             exit_message="Aborted",
         )
 
+    cmd = f"aws secretsmanager delete-secret --secret-id {secret.name} --profile {profile}"
+    if force:
+        cmd += " --force-delete-without-recovery"
     if confirm(f"Delete secret {secret.name} ?", _exit=True, exit_message="Aborted"):
         c.run(
-            f"aws secretsmanager delete-secret --secret-id {secret.name} --profile {profile}",
+            cmd,
             echo=True,
         )
 
