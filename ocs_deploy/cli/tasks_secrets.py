@@ -1,6 +1,7 @@
 import json
 
 from invoke import Context, Exit, task
+from termcolor import cprint
 
 from ocs_deploy.config import Secret
 from ocs_deploy.cli.tasks_aws_utils import (
@@ -140,6 +141,10 @@ def create_missing_secrets(c: Context, profile=DEFAULT_PROFILE):
     secrets = _get_secrets(c, config, profile, include_missing=True)
     for secret in secrets:
         if secret.created:
+            continue
+
+        if secret.managed:
+            cprint(f"Skipping managed secret: {secret.name}", "magenta")
             continue
 
         value = input(f"Enter value for secret {secret.name} (blank to skip): ")
