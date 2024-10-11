@@ -7,7 +7,9 @@ from ocs_deploy.config import OCSConfig
 
 class S3Stack(cdk.Stack):
     def __init__(self, scope: Construct, config: OCSConfig) -> None:
-        super().__init__(scope, config.stack_name(OCSConfig.S3_STACK), env=config.env())
+        super().__init__(
+            scope, config.stack_name(OCSConfig.S3_STACK), env=config.cdk_env()
+        )
 
         # Create a public bucket for storing public media files
         s3.Bucket(

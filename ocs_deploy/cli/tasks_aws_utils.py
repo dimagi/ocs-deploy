@@ -1,12 +1,11 @@
 import os
 
-from dotenv import dotenv_values
 from invoke import Context, Exit, task
 from termcolor import cprint
 
 from ocs_deploy.config import OCSConfig
 
-DEFAULT_PROFILE = os.environ.get("AWS_PROFILE")
+DEFAULT_PROFILE = os.getenv("AWS_PROFILE")
 
 PROFILE_HELP = {
     "profile": "AWS profile to use for deployment. Will read from AWS_PROFILE env var if not set."
@@ -46,4 +45,4 @@ def _get_config(c: Context):
             -1,
         )
     cprint(f"Using environment: {env}", color="blue")
-    return OCSConfig(dotenv_values(f".env.{env}"))
+    return OCSConfig(env)

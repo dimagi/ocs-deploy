@@ -5,8 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "aws-cdk-lib>=2.162.0",
-    "constructs>=10.3.1",
+    "aws-cdk-lib==2.161.1",  # pinned because 2.162.0 didn't work with cdk==2.162.0
     "invoke>=2.2.0",
     "python-dotenv>=1.0.1",
     "pyyaml>=6.0.2",
@@ -18,4 +17,5 @@ dependencies = [
 ocs = "ocs_deploy.cli.tasks:program.run"
 
 [tool.uv]
+package = true
 reinstall-package = ["ocs-deploy"]

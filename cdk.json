@@ -12,11 +12,11 @@
       ".env",
       ".env.example",
       ".pre-commit-config.yaml",
+      "pyproject.toml",
       "source.bat",
       "**/__init__.py",
       "**/__pycache__",
-      "tests",
-      "tasks*"
+      "tests"
     ]
   },
   "context": {

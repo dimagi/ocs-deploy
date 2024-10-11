@@ -1,10 +1,10 @@
 import dataclasses
-import os
 import re
 from datetime import datetime
 from pathlib import Path
 
 import yaml
+from dotenv import dotenv_values
 
 
 class OCSConfig:
@@ -30,8 +30,16 @@ class OCSConfig:
         DJANGO_STACK,
     ]
 
-    def __init__(self, config: dict = None):
-        config = config if config else os.environ
+    def __init__(self, env: str):
+        if not env:
+            raise Exception("No environment specified")
+
+        env_path = Path(f".env.{env}")
+        if not env_path.exists():
+            raise Exception(f"Environment file not found: {env_path}")
+
+        config = dotenv_values(env_path)
+        self.environment = env
         self.account = config["CDK_ACCOUNT"]
         self.region = config["CDK_REGION"]
 
@@ -39,7 +47,6 @@ class OCSConfig:
         self.domain_name = config["DOMAIN_NAME"]
 
         self.app_name = config.get("APP_NAME", "ocs")
-        self.environment = config.get("ENVIRONMENT", "dev")
         self.maintenance_window = config.get(
             "MAINTENANCE_WINDOW", "Mon:00:00-Mon:03:00"
         )
@@ -59,10 +66,10 @@ class OCSConfig:
             raise Exception(f"Invalid stack name: {name}")
         return self.make_name(f"{name}-stack", include_region=True)
 
-    def env(self):
+    def cdk_env(self):
         import aws_cdk as cdk
 
-        return cdk.Environment(account=os.getenv("CDK_ACCOUNT"), region=self.region)
+        return cdk.Environment(account=self.account, region=self.region)
 
     def make_name(self, name: str = "", include_region=False):
         name = f"-{name}" if name else ""

@@ -8,7 +8,7 @@ from ocs_deploy.config import OCSConfig
 class Ec2TmpStack(cdk.Stack):
     def __init__(self, scope: Construct, vpc, config: OCSConfig) -> None:
         super().__init__(
-            scope, config.stack_name(OCSConfig.EC2_TMP_STACK), env=config.env()
+            scope, config.stack_name(OCSConfig.EC2_TMP_STACK), env=config.cdk_env()
         )
 
         user_data = ec2.UserData.for_linux()

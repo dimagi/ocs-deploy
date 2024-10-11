@@ -38,7 +38,7 @@ class FargateStack(cdk.Stack):
         config: OCSConfig,
     ) -> None:
         super().__init__(
-            scope, config.stack_name(OCSConfig.DJANGO_STACK), env=config.env()
+            scope, config.stack_name(OCSConfig.DJANGO_STACK), env=config.cdk_env()
         )
 
         self.config = config

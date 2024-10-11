@@ -105,7 +105,7 @@ def deploy(
     profile = get_profile_and_auth(c, profile)
 
     config = _get_config(c)
-    cmd = f"cdk deploy --profile {profile}"
+    cmd = f"cdk deploy --profile {profile} --context ocs_env={config.environment}"
     if stacks:
         stacks = " ".join([config.stack_name(stack) for stack in stacks.split(",")])
         cmd += f" {stacks}"
@@ -137,7 +137,7 @@ def diff(
     profile = get_profile_and_auth(c, profile)
 
     config = _get_config(c)
-    cmd = f"cdk diff --profile {profile}"
+    cmd = f"cdk diff --profile {profile} --context ocs_env={config.environment}"
     if stacks:
         stacks = " ".join([config.stack_name(stack) for stack in stacks.split(",")])
         cmd += f" {stacks}"

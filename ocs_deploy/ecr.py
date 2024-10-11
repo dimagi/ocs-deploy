@@ -10,7 +10,7 @@ from ocs_deploy.config import OCSConfig
 class EcrStack(cdk.Stack):
     def __init__(self, scope: Construct, config: OCSConfig) -> None:
         super().__init__(
-            scope, config.stack_name(OCSConfig.ECR_STACK), env=config.env()
+            scope, config.stack_name(OCSConfig.ECR_STACK), env=config.cdk_env()
         )
         self.repo = self.setup_ecr(config)
 

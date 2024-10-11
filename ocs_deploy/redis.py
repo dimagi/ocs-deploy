@@ -13,7 +13,7 @@ from ocs_deploy.config import OCSConfig
 class RedisStack(cdk.Stack):
     def __init__(self, scope: Construct, vpc, config: OCSConfig) -> None:
         super().__init__(
-            scope, config.stack_name(OCSConfig.REDIS_STACK), env=config.env()
+            scope, config.stack_name(OCSConfig.REDIS_STACK), env=config.cdk_env()
         )
 
         self.setup_redis_database(vpc, config)

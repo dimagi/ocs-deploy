@@ -8,7 +8,7 @@ from ocs_deploy.config import OCSConfig
 class VpcStack(cdk.Stack):
     def __init__(self, scope: Construct, config: OCSConfig) -> None:
         super().__init__(
-            scope, config.stack_name(OCSConfig.VPC_STACK), env=config.env()
+            scope, config.stack_name(OCSConfig.VPC_STACK), env=config.cdk_env()
         )
         self.vpc = self.setup_vpc(config)
 

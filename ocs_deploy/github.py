@@ -10,7 +10,7 @@ class GithubOidcStack(cdk.Stack):
 
     def __init__(self, scope: Construct, config: OCSConfig) -> None:
         super().__init__(
-            scope, config.stack_name(OCSConfig.GITHUB_STACK), env=config.env()
+            scope, config.stack_name(OCSConfig.GITHUB_STACK), env=config.cdk_env()
         )
 
         self.setup_github_actions_role(config)

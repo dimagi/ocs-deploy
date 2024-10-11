@@ -13,7 +13,7 @@ class DomainStack(cdk.Stack):
 
     def __init__(self, scope: Construct, config: OCSConfig) -> None:
         super().__init__(
-            scope, config.stack_name(OCSConfig.DOMAINS_STACK), env=config.env()
+            scope, config.stack_name(OCSConfig.DOMAINS_STACK), env=config.cdk_env()
         )
 
         self.certificate = self.create_certificate(config)

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import aws_cdk as cdk
-from dotenv import load_dotenv
 
 from ocs_deploy.config import OCSConfig
 from ocs_deploy.domains import DomainStack
@@ -15,14 +14,8 @@ from ocs_deploy.s3 import S3Stack
 from ocs_deploy.vpc import VpcStack
 
 app = cdk.App()
-env = app.node.try_get_context("env")
-if not env:
-    raise Exception("No environment specified")
-
-load_dotenv(f".env.{env}")
-
-config = OCSConfig()
-
+env = app.node.try_get_context("ocs_env")
+config = OCSConfig(env)
 
 S3Stack(app, config)
 GithubOidcStack(app, config)
