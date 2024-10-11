@@ -17,7 +17,8 @@ from ocs_deploy.cli.tasks_utils import confirm
         "command": "Command to execute in the container. Defaults to '/bin/bash'",
         "service": "Service to connect to. One of [django, celery, beat, ec2tmp]. Defaults to 'django'",
     }
-    | PROFILE_HELP
+    | PROFILE_HELP,
+    auto_shortflags=False,
 )
 def connect(c: Context, command="/bin/bash", service="django", profile=DEFAULT_PROFILE):
     """Connect to a running ECS container and execute the given command."""
@@ -95,11 +96,18 @@ def _fargate_connect(c: Context, command, service, profile):
         "stacks": f"Comma-separated list of the stacks to deploy ({' | '.join(OCSConfig.ALL_STACKS)})",
         "verbose": "Enable verbose output",
         "maintenance": "Enable maintenance mode",
+        "skip_approval": "Do not prompt for approval before deploying",
     }
-    | PROFILE_HELP
+    | PROFILE_HELP,
+    auto_shortflags=False,
 )
 def deploy(
-    c: Context, stacks=None, verbose=False, profile=DEFAULT_PROFILE, maintenance=False
+    c: Context,
+    stacks=None,
+    verbose=False,
+    profile=DEFAULT_PROFILE,
+    maintenance=False,
+    skip_approval=False,
 ):
     """Deploy the specified stacks. If no stacks are specified, all stacks will be deployed."""
     profile = get_profile_and_auth(c, profile)
@@ -118,6 +126,7 @@ def deploy(
     if maintenance:
         cmd += " --context maintenance_mode=true"
 
+    cmd += " --require-approval " + ("never" if skip_approval else "any-change")
     cmd += " --progress events"
     c.run(cmd, echo=True, pty=True)
 
@@ -128,7 +137,8 @@ def deploy(
         "verbose": "Enable verbose output",
         "maintenance": "Enable maintenance mode",
     }
-    | PROFILE_HELP
+    | PROFILE_HELP,
+    auto_shortflags=False,
 )
 def diff(
     c: Context, stacks=None, verbose=False, profile=DEFAULT_PROFILE, maintenance=False
@@ -151,7 +161,7 @@ def diff(
     c.run(cmd, echo=True, pty=True)
 
 
-@task
+@task(auto_shortflags=False)
 def bootstrap(c: Context, profile=DEFAULT_PROFILE):
     """Bootstrap the AWS environment.
 
