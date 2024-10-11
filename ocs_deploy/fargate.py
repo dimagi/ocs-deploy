@@ -232,15 +232,16 @@ class FargateStack(cdk.Stack):
                 " "
             )
             container_name = "celery-worker"
-            health_check = ecs.HealthCheck(
-                command=[
-                    "CMD-SHELL",
-                    "celery -A gpt_playground inspect ping --destination celery@$HOSTNAME",
-                ],
-                interval=cdk.Duration.seconds(30),
-                timeout=cdk.Duration.seconds(5),
-                retries=4,
-            )
+            health_check = None  # disable for now
+            # health_check = ecs.HealthCheck(
+            #     command=[
+            #         "CMD-SHELL",
+            #         "celery -A gpt_playground inspect ping --destination celery@$HOSTNAME",
+            #     ],
+            #     interval=cdk.Duration.seconds(30),
+            #     timeout=cdk.Duration.seconds(5),
+            #     retries=4,
+            # )
 
         log_group = self._get_log_group(config.make_name(log_group_name))
         log_driver = ecs.AwsLogDriver(
