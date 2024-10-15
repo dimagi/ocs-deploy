@@ -15,14 +15,12 @@ PROFILE_HELP = {
 @task(name="login", help=PROFILE_HELP)
 def aws_login(c: Context, profile=DEFAULT_PROFILE):
     """Login to AWS SSO."""
-    result = c.run(f"aws sso login --profile {profile}", echo=True)
+    result = c.run(aws_cli("sso login", profile), echo=True)
     return result.ok
 
 
 def _check_credentials(c: Context, profile: str):
-    result = c.run(
-        f"aws sts get-caller-identity --profile {profile}", warn=True, hide=True
-    )
+    result = c.run(aws_cli("sts get-caller-identity", profile), warn=True, hide=True)
     return result.ok
 
 
@@ -51,3 +49,17 @@ def _get_config(c: Context):
         )
     cprint(f"Using environment: {env}", color="blue")
     return OCSConfig(env)
+
+
+def aws_cli(cmd, profile, **kwargs):
+    """Generate an AWS CLI command."""
+    args = ""
+    for k, v in kwargs.items():
+        k = k.replace("_", "-")
+        if v is True:
+            args += f" --{k}"
+        elif v is False:
+            continue
+        else:
+            args += f" --{k}={v}"
+    return f"aws --no-cli-pager {cmd} --profile={profile} {args}"

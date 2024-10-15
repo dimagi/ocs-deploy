@@ -7,9 +7,13 @@ from ocs_deploy.cli.tasks_aws_utils import (
     DEFAULT_PROFILE,
     PROFILE_HELP,
     _get_config,
+    aws_cli,
     get_profile_and_auth,
 )
 from ocs_deploy.cli.tasks_utils import confirm
+
+
+SERVICES_HELP = "Services to target [ALL, django, celery, beat]. Separate multiple with a comma. Defaults to 'ALL'"
 
 
 @task(
@@ -28,10 +32,11 @@ def connect(c: Context, command="/bin/bash", service="django", profile=DEFAULT_P
     if service == "ec2tmp":
         stack = config.stack_name(OCSConfig.EC2_TMP_STACK)
         name = config.make_name("TmpInstance")
-        filters = f"--filters Name=tag:Name,Values={stack}/{name}"
-        query = "--query 'Reservations[*].Instances[*].[InstanceId]'"
+        filters = f"Name=tag:Name,Values={stack}/{name}"
+        query = "'Reservations[*].Instances[*].[InstanceId]'"
         result = c.run(
-            f"aws ec2 describe-instances --output text {filters} {query}", hide=True
+            aws_cli("ec2 describe-instances", profile, filters=filters, query=query),
+            hide=True,
         )
         instances = result.stdout.strip().split()
         if not instances:
@@ -40,7 +45,7 @@ def connect(c: Context, command="/bin/bash", service="django", profile=DEFAULT_P
                 -1,
             )
         c.run(
-            "aws ssm start-session --target " + instances[0],
+            aws_cli("ssm start-session", profile, target=instances[0]),
             echo=True,
             pty=True,
         )
@@ -55,7 +60,7 @@ def _fargate_connect(c: Context, command, service, profile):
     service, container = _get_service_and_container(config, service)
 
     result = c.run(
-        f"aws ecs list-tasks --cluster {cluster} --service {service} --profile {profile}",
+        aws_cli("ecs list-tasks", profile, service=service, cluster=cluster),
         hide=True,
     )
     response = json.loads(result.stdout)
@@ -68,13 +73,15 @@ def _fargate_connect(c: Context, command, service, profile):
 
     fargate_task = tasks[0]
     c.run(
-        f"aws ecs execute-command "
-        f"--cluster {cluster} "
-        f"--task {fargate_task} "
-        f"--container {container} "
-        f"--command {command} "
-        f"--profile {profile} "
-        f"--interactive",
+        aws_cli(
+            "ecs execute-command",
+            profile,
+            cluster=cluster,
+            task=fargate_task,
+            container=container,
+            command=command,
+            interactive=True,
+        ),
         echo=True,
         pty=True,
     )
@@ -167,32 +174,79 @@ def diff(
 
 
 @task(
-    help={
-        "service": "Service to connect to. One of [ALL, django, celery, beat]. Defaults to 'ALL'",
-    },
+    help={"services": SERVICES_HELP},
     auto_shortflags=False,
 )
 def restart(c: Context, services="ALL", profile=DEFAULT_PROFILE):
     """Restart an ECS service."""
     config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
+    _update_services(c, config, services, profile, "restart")
+
+
+@task(
+    name="maintenance:on",
+    help={"services": SERVICES_HELP},
+    auto_shortflags=False,
+)
+def maintenance_on(c: Context, services="ALL", profile=DEFAULT_PROFILE):
+    """Enable maintenance mode."""
+    maintenance(c, True, services, profile)
+
+
+@task(
+    name="maintenance:off",
+    help={"services": SERVICES_HELP},
+    auto_shortflags=False,
+)
+def maintenance_off(c: Context, services="ALL", profile=DEFAULT_PROFILE):
+    """Disable maintenance mode."""
+    maintenance(c, False, services, profile)
+
+
+def maintenance(c: Context, enable, services="ALL", profile=DEFAULT_PROFILE):
+    config = _get_config(c)
+    profile = get_profile_and_auth(c, profile)
+    action = "stop" if enable else "start"
+    extra_args = "--desired-count 0" if enable else "--desired-count 1"
+    _update_services(c, config, services, profile, action, extra_args)
+
+
+def _update_services(c: Context, config, services, profile, action, extra_args=None):
+    services = _get_services(services)
+
+    confirm(
+        f"This will {action} the following services: {', '.join(services)}. Continue ?",
+        _exit=True,
+        exit_message="Aborted",
+    )
 
     cluster = config.make_name("Cluster")
-    if services == "ALL":
-        confirm(
-            "This will restart all services. Continue ?",
-            _exit=True,
-            exit_message="Aborted",
-        )
-        services = ["django", "celery", "beat"]
-
+    service_names = []
     for service in services:
         service_name, _ = _get_service_and_container(config, service)
-        c.run(
-            f"aws ecs update-service --service {service_name} --cluster {cluster} --force-new-deployment",
-            echo=True,
-            pty=True,
+        service_names.append(service_name)
+        command = aws_cli(
+            "ecs update-service",
+            profile,
+            service=service_name,
+            cluster=cluster,
+            force_new_deployment=True,
         )
+        if extra_args:
+            command += " " + extra_args
+        c.run(command, echo=True, pty=True, hide="out")
+
+    c.run(
+        aws_cli(
+            "ecs wait services-stable",
+            profile,
+            cluster=cluster,
+            services=" ".join(service_names),
+        ),
+        echo=True,
+        pty=True,
+    )
 
 
 @task(auto_shortflags=False)
@@ -220,3 +274,11 @@ def _check_maintenance_mode(maintenance_mode):
         )
 
     return " --context maintenance_mode=true" if maintenance_mode else ""
+
+
+def _get_services(services):
+    if services == "ALL":
+        services = ["django", "celery", "beat"]
+    else:
+        services = [s.strip() for s in services.split(",")]
+    return services

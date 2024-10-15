@@ -8,6 +8,7 @@ from ocs_deploy.cli.tasks_aws_utils import (
     DEFAULT_PROFILE,
     PROFILE_HELP,
     _get_config,
+    aws_cli,
     get_profile_and_auth,
 )
 from ocs_deploy.cli.tasks_utils import confirm
@@ -27,7 +28,7 @@ def list_secrets(c: Context, profile=DEFAULT_PROFILE):
 def _get_secrets(c, config, profile, name="", include_missing=True):
     filter_expr = f'Key="name",Values="{config.make_secret_name(name)}"'
     results = c.run(
-        f"aws secretsmanager list-secrets --filter {filter_expr} --profile {profile}",
+        aws_cli("secretsmanager list-secrets", profile, filter=filter_expr),
         hide=True,
         echo=True,
     )
@@ -56,7 +57,7 @@ def get_secret_value(c: Context, name, profile=DEFAULT_PROFILE):
     if not name.startswith(prefix):
         name = config.make_secret_name(name)
     results = c.run(
-        f"aws secretsmanager get-secret-value --secret-id {name} --profile {profile}",
+        aws_cli("secretsmanager get-secret-value", profile, secret_id=name),
         hide=True,
         echo=True,
     )
@@ -99,12 +100,19 @@ def set_secret_value(c: Context, name, value, profile=DEFAULT_PROFILE):
     if not existing:
         confirm(f"Create secret: {name} ?", _exit=True, exit_message="Aborted")
         c.run(
-            f"aws secretsmanager create-secret --name {name} --secret-string '{value}' --profile {profile}",
+            aws_cli(
+                "secretsmanager create-secret", profile, name=name, secret_string=value
+            ),
             echo=True,
         )
     else:
         c.run(
-            f"aws secretsmanager put-secret-value --secret-id {name} --secret-string '{value}' --profile {profile}",
+            aws_cli(
+                "secretsmanager put-secret-value",
+                profile,
+                secret_id=name,
+                secret_string=value,
+            ),
             echo=True,
         )
 
@@ -123,7 +131,7 @@ def delete_secret(c: Context, name, profile=DEFAULT_PROFILE, force=False):
             exit_message="Aborted",
         )
 
-    cmd = f"aws secretsmanager delete-secret --secret-id {secret.name} --profile {profile}"
+    cmd = aws_cli("secretsmanager delete-secret", profile, secret_id=secret.name)
     if force:
         cmd += " --force-delete-without-recovery"
     if confirm(f"Delete secret {secret.name} ?", _exit=True, exit_message="Aborted"):
@@ -153,7 +161,12 @@ def create_missing_secrets(c: Context, profile=DEFAULT_PROFILE):
             continue
 
         c.run(
-            f"aws secretsmanager create-secret --name {secret.name} --secret-string '{value}' --profile {profile}",
+            aws_cli(
+                "secretsmanager create-secret",
+                profile,
+                name=secret.name,
+                secret_string=value,
+            ),
             echo=True,
         )
 
