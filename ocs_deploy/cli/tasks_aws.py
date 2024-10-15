@@ -207,7 +207,7 @@ def maintenance(c: Context, enable, services="ALL", profile=DEFAULT_PROFILE):
     profile = get_profile_and_auth(c, profile)
     action = "stop" if enable else "start"
     extra_args = "--desired-count 0" if enable else "--desired-count 1"
-    _update_services(c, config, services, profile, action, extra_args)
+    _update_services(c, config, services, profile, action, extra_args=extra_args)
 
 
 def _update_services(
