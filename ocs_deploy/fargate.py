@@ -88,7 +88,7 @@ class FargateStack(cdk.Stack):
         # Setup AutoScaling policy
         scaling = django_web_service.service.auto_scale_task_count(
             max_capacity=2,
-            min_capacity=0 if self.node.try_get_context("maintenance_mode") else 1,
+            min_capacity=1,
         )
         scaling.scale_on_cpu_utilization(
             config.make_name("CpuScaling"),
@@ -96,10 +96,6 @@ class FargateStack(cdk.Stack):
             scale_in_cooldown=cdk.Duration.seconds(60),
             scale_out_cooldown=cdk.Duration.seconds(60),
         )
-
-        if self.node.try_get_context("maintenance_mode"):
-            service = django_web_service.service.node.default_child
-            service.desired_count = 0
 
         # print out fargateService load balancer url
         cdk.CfnOutput(
@@ -112,7 +108,7 @@ class FargateStack(cdk.Stack):
             self,
             config.make_name("CeleryService"),
             cluster=cluster,
-            desired_count=0 if self.node.try_get_context("maintenance_mode") else 1,
+            desired_count=1,
             service_name=config.ecs_celery_service_name,
             task_definition=self._get_celery_task_definition(
                 ecr_repo, config, is_beat=False
@@ -125,7 +121,7 @@ class FargateStack(cdk.Stack):
             self,
             config.make_name("CeleryBeatService"),
             cluster=cluster,
-            desired_count=0 if self.node.try_get_context("maintenance_mode") else 1,
+            desired_count=1,
             service_name=config.ecs_celery_beat_service_name,
             task_definition=self._get_celery_task_definition(
                 ecr_repo, config, is_beat=True

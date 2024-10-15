@@ -107,7 +107,6 @@ def _get_service_and_container(config, service):
     help={
         "stacks": f"Comma-separated list of the stacks to deploy ({' | '.join(OCSConfig.ALL_STACKS)})",
         "verbose": "Enable verbose output",
-        "maintenance": "Enable maintenance mode",
         "skip_approval": "Do not prompt for approval before deploying",
     }
     | PROFILE_HELP,
@@ -118,7 +117,6 @@ def deploy(
     stacks=None,
     verbose=False,
     profile=DEFAULT_PROFILE,
-    maintenance=False,
     skip_approval=False,
 ):
     """Deploy the specified stacks. If no stacks are specified, all stacks will be deployed."""
@@ -135,9 +133,6 @@ def deploy(
     if verbose:
         cmd += " --verbose"
 
-    if maintenance:
-        cmd += " --context maintenance_mode=true"
-
     cmd += " --require-approval " + ("never" if skip_approval else "any-change")
     cmd += " --progress events"
     c.run(cmd, echo=True, pty=True)
@@ -147,13 +142,15 @@ def deploy(
     help={
         "stacks": f"Comma-separated list of the stacks to deploy ({' | '.join(OCSConfig.ALL_STACKS)})",
         "verbose": "Enable verbose output",
-        "maintenance": "Enable maintenance mode",
     }
     | PROFILE_HELP,
     auto_shortflags=False,
 )
 def diff(
-    c: Context, stacks=None, verbose=False, profile=DEFAULT_PROFILE, maintenance=False
+    c: Context,
+    stacks=None,
+    verbose=False,
+    profile=DEFAULT_PROFILE,
 ):
     """Deploy the specified stacks. If no stacks are specified, all stacks will be deployed."""
     profile = get_profile_and_auth(c, profile)
@@ -167,9 +164,6 @@ def diff(
         cmd += " --all"
     if verbose:
         cmd += " --verbose"
-
-    cmd += _check_maintenance_mode(maintenance)
-
     c.run(cmd, echo=True, pty=True)
 
 
@@ -263,17 +257,6 @@ def bootstrap(c: Context, profile=DEFAULT_PROFILE):
         echo=True,
         pty=True,
     )
-
-
-def _check_maintenance_mode(maintenance_mode):
-    if maintenance_mode:
-        confirm(
-            "Maintenance mode is enabled. This will stop all service. Continue ?",
-            _exit=True,
-            exit_message="Aborted",
-        )
-
-    return " --context maintenance_mode=true" if maintenance_mode else ""
 
 
 def _get_services(services):
