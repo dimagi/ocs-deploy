@@ -5,6 +5,7 @@ from invoke import Context, Exit, task
 from ocs_deploy.config import OCSConfig
 from ocs_deploy.cli.tasks_aws_utils import (
     DEFAULT_PROFILE,
+    NoQuote,
     PROFILE_HELP,
     _get_config,
     aws_cli,
@@ -241,7 +242,7 @@ def _update_services(
             "ecs wait services-stable",
             profile,
             cluster=cluster,
-            services=" ".join(service_names),
+            services=NoQuote(" ".join(service_names)),
         ),
         echo=True,
         pty=True,

@@ -1,4 +1,5 @@
 import os
+import shlex
 
 from invoke import Context, Exit, task
 from termcolor import cprint
@@ -61,5 +62,15 @@ def aws_cli(cmd, profile, **kwargs):
         elif v is False:
             continue
         else:
-            args += f" --{k} {v}"
+            if isinstance(v, NoQuote):
+                value = v
+            else:
+                value = shlex.quote(v)
+            args += f" --{k} {value}"
     return f"aws --no-cli-pager {cmd} --profile={profile} {args}"
+
+
+class NoQuote(str):
+    """A string that should not be quoted when passed to a shell command."""
+
+    pass
