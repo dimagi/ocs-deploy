@@ -27,11 +27,13 @@ def _check_credentials(c: Context, profile: str):
 
 def get_profile_and_auth(c: Context, profile):
     if not profile:
+        env = c.config.environment
         cprint(
             "AWS profile not set. You can pass it via '--profile' or the AWS_PROFILE env var.",
             color="light_grey",
         )
-        profile = input("Enter profile: ")
+        default = f"ocs-{env}"
+        profile = input(f"Enter profile: [Press enter to use '{default}'] ") or default
 
     cprint(f"Using AWS profile: {profile}", color="blue")
     if not _check_credentials(c, profile):
