@@ -71,11 +71,10 @@ def get_secret_value(c: Context, name, profile=DEFAULT_PROFILE):
     name="set",
     help={
         "name": "Name of the secret to set",
-        "value": "Value to set for the secret",
     }
     | PROFILE_HELP,
 )
-def set_secret_value(c: Context, name, value, profile=DEFAULT_PROFILE):
+def set_secret_value(c: Context, name, profile=DEFAULT_PROFILE):
     """Set a secret value by name."""
     config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
@@ -96,6 +95,11 @@ def set_secret_value(c: Context, name, value, profile=DEFAULT_PROFILE):
             _exit=True,
             exit_message="Aborted",
         )
+
+    value = input(f"Enter value for secret {name} (blank to skip): ")
+    if not value:
+        print("Skipping...")
+        return
 
     if not existing:
         confirm(f"Create secret: {name} ?", _exit=True, exit_message="Aborted")

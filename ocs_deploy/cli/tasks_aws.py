@@ -13,6 +13,7 @@ from ocs_deploy.cli.tasks_aws_utils import (
 from ocs_deploy.cli.tasks_utils import confirm
 
 
+STACKS_HELP = f"Comma-separated list of the stacks to deploy ({' | '.join(OCSConfig.ALL_STACKS)}). Defaults to ALL."
 SERVICES_HELP = "Services to target [ALL, django, celery, beat]. Separate multiple with a comma. Defaults to 'ALL'"
 
 
@@ -30,32 +31,34 @@ def connect(c: Context, command="/bin/bash", service="django", profile=DEFAULT_P
     profile = get_profile_and_auth(c, profile)
 
     if service == "ec2tmp":
-        stack = config.stack_name(OCSConfig.EC2_TMP_STACK)
-        name = config.make_name("TmpInstance")
-        filters = f"Name=tag:Name,Values={stack}/{name}"
-        query = "'Reservations[*].Instances[*].[InstanceId]'"
-        result = c.run(
-            aws_cli("ec2 describe-instances", profile, filters=filters, query=query),
-            hide=True,
-        )
-        instances = result.stdout.strip().split()
-        if not instances:
-            raise Exit(
-                f"No instances of {service} were found.",
-                -1,
-            )
-        c.run(
-            aws_cli("ssm start-session", profile, target=instances[0]),
-            echo=True,
-            pty=True,
-        )
-
+        _ssm_connect(c, config, service, profile)
     else:
-        _fargate_connect(c, command, service, profile)
+        _fargate_connect(c, config, command, service, profile)
 
 
-def _fargate_connect(c: Context, command, service, profile):
-    config = _get_config(c)
+def _ssm_connect(c, config, service, profile):
+    stack = config.stack_name(OCSConfig.EC2_TMP_STACK)
+    name = config.make_name("TmpInstance")
+    filters = f"Name=tag:Name,Values={stack}/{name}"
+    query = "'Reservations[*].Instances[*].[InstanceId]'"
+    result = c.run(
+        aws_cli("ec2 describe-instances", profile, filters=filters, query=query),
+        hide=True,
+    )
+    instances = result.stdout.strip().split()
+    if not instances:
+        raise Exit(
+            f"No instances of {service} were found.",
+            -1,
+        )
+    c.run(
+        aws_cli("ssm start-session", profile, target=instances[0]),
+        echo=True,
+        pty=True,
+    )
+
+
+def _fargate_connect(c: Context, config, command, service, profile):
     cluster = config.make_name("Cluster")
     service, container = _get_service_and_container(config, service)
 
@@ -105,7 +108,7 @@ def _get_service_and_container(config, service):
 
 @task(
     help={
-        "stacks": f"Comma-separated list of the stacks to deploy ({' | '.join(OCSConfig.ALL_STACKS)})",
+        "stacks": STACKS_HELP,
         "verbose": "Enable verbose output",
         "skip_approval": "Do not prompt for approval before deploying",
     }
@@ -140,7 +143,7 @@ def deploy(
 
 @task(
     help={
-        "stacks": f"Comma-separated list of the stacks to deploy ({' | '.join(OCSConfig.ALL_STACKS)})",
+        "stacks": STACKS_HELP,
         "verbose": "Enable verbose output",
     }
     | PROFILE_HELP,
@@ -152,7 +155,7 @@ def diff(
     verbose=False,
     profile=DEFAULT_PROFILE,
 ):
-    """Deploy the specified stacks. If no stacks are specified, all stacks will be deployed."""
+    """Generate of list of changes to be deployed."""
     profile = get_profile_and_auth(c, profile)
 
     config = _get_config(c)
@@ -172,10 +175,10 @@ def diff(
     auto_shortflags=False,
 )
 def restart(c: Context, services="ALL", profile=DEFAULT_PROFILE):
-    """Restart an ECS service."""
+    """Restart ECS services."""
     config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
-    _update_services(c, config, services, profile, "restart")
+    _update_services(c, config, services, profile, "restart", force=True)
 
 
 @task(
@@ -206,7 +209,9 @@ def maintenance(c: Context, enable, services="ALL", profile=DEFAULT_PROFILE):
     _update_services(c, config, services, profile, action, extra_args)
 
 
-def _update_services(c: Context, config, services, profile, action, extra_args=None):
+def _update_services(
+    c: Context, config, services, profile, action, force=True, extra_args=None
+):
     services = _get_services(services)
 
     confirm(
@@ -225,7 +230,7 @@ def _update_services(c: Context, config, services, profile, action, extra_args=N
             profile,
             service=service_name,
             cluster=cluster,
-            force_new_deployment=True,
+            force_new_deployment=force,
         )
         if extra_args:
             command += " " + extra_args

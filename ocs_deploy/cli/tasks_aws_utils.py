@@ -61,5 +61,5 @@ def aws_cli(cmd, profile, **kwargs):
         elif v is False:
             continue
         else:
-            args += f" --{k}={v}"
+            args += f" --{k} {v}"
     return f"aws --no-cli-pager {cmd} --profile={profile} {args}"
