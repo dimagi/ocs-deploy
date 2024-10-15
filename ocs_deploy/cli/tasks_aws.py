@@ -22,10 +22,10 @@ from ocs_deploy.cli.tasks_utils import confirm
 )
 def connect(c: Context, command="/bin/bash", service="django", profile=DEFAULT_PROFILE):
     """Connect to a running ECS container and execute the given command."""
+    config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
 
     if service == "ec2tmp":
-        config = _get_config(c)
         stack = config.stack_name(OCSConfig.EC2_TMP_STACK)
         name = config.make_name("TmpInstance")
         filters = f"--filters Name=tag:Name,Values={stack}/{name}"
@@ -52,18 +52,7 @@ def connect(c: Context, command="/bin/bash", service="django", profile=DEFAULT_P
 def _fargate_connect(c: Context, command, service, profile):
     config = _get_config(c)
     cluster = config.make_name("Cluster")
-    match service:
-        case "django":
-            service = config.make_name("Django")
-            container = "web"
-        case "celery":
-            service = config.make_name("Celery")
-            container = "celery-worker"
-        case "beat":
-            service = config.make_name("CeleryBeat")
-            container = "celery-beat"
-        case _:
-            raise Exit(f"Unknown service '{service}'", -1)
+    service, container = _get_service_and_container(config, service)
 
     result = c.run(
         f"aws ecs list-tasks --cluster {cluster} --service {service} --profile {profile}",
@@ -89,6 +78,22 @@ def _fargate_connect(c: Context, command, service, profile):
         echo=True,
         pty=True,
     )
+
+
+def _get_service_and_container(config, service):
+    match service:
+        case "django":
+            service = config.make_name("Django")
+            container = "web"
+        case "celery":
+            service = config.make_name("Celery")
+            container = "celery-worker"
+        case "beat":
+            service = config.make_name("CeleryBeat")
+            container = "celery-beat"
+        case _:
+            raise Exit(f"Unknown service '{service}'", -1)
+    return service, container
 
 
 @task(
@@ -161,15 +166,44 @@ def diff(
     c.run(cmd, echo=True, pty=True)
 
 
+@task(
+    help={
+        "service": "Service to connect to. One of [ALL, django, celery, beat]. Defaults to 'ALL'",
+    },
+    auto_shortflags=False,
+)
+def restart(c: Context, services="ALL", profile=DEFAULT_PROFILE):
+    """Restart an ECS service."""
+    config = _get_config(c)
+    profile = get_profile_and_auth(c, profile)
+
+    cluster = config.make_name("Cluster")
+    if services == "ALL":
+        confirm(
+            "This will restart all services. Continue ?",
+            _exit=True,
+            exit_message="Aborted",
+        )
+        services = ["django", "celery", "beat"]
+
+    for service in services:
+        service_name, _ = _get_service_and_container(config, service)
+        c.run(
+            f"aws ecs update-service --service {service_name} --cluster {cluster} --force-new-deployment",
+            echo=True,
+            pty=True,
+        )
+
+
 @task(auto_shortflags=False)
 def bootstrap(c: Context, profile=DEFAULT_PROFILE):
     """Bootstrap the AWS environment.
 
     This only needs to be run once per AWS account.
     """
+    config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
 
-    config = _get_config(c)
     c.run(
         f"cdk bootstrap --profile {profile} --context ocs_env={config.environment}",
         echo=True,

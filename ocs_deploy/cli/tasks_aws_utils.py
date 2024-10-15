@@ -28,11 +28,11 @@ def _check_credentials(c: Context, profile: str):
 
 def get_profile_and_auth(c: Context, profile):
     if not profile:
-        profile = input("AWS profile not set. Enter profile: ")
         cprint(
-            "You can pass it via '--profile' or the AWS_PROFILE env var",
+            "AWS profile not set. You can pass it via '--profile' or the AWS_PROFILE env var.",
             color="light_grey",
         )
+        profile = input("Enter profile: ")
 
     cprint(f"Using AWS profile: {profile}", color="blue")
     if not _check_credentials(c, profile):

@@ -112,7 +112,7 @@ Edit the generated `.env.{env name}` file to set your required configurations.
 2. **Set Up RDS, Redis, and S3**
 
     ```bash
-    ocs --env <env> aws.deploy --stacks rds,redis,s3
+    ocs --env <env> aws.deploy --stacks ec2tmp,rds,redis,s3
     ```
 
 3. **Set Up Domains and GitHub Roles**
