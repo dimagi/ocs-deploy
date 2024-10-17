@@ -32,18 +32,24 @@ def connect(c: Context, command="/bin/bash", service="django", profile=DEFAULT_P
     profile = get_profile_and_auth(c, profile)
 
     if service == "ec2tmp":
-        _ssm_connect(c, config, service, profile)
+        _ssm_connect(c, config, command, service, profile)
     else:
         _fargate_connect(c, config, command, service, profile)
 
 
-def _ssm_connect(c, config, service, profile):
+def _ssm_connect(c, config, command, service, profile):
     stack = config.stack_name(OCSConfig.EC2_TMP_STACK)
     name = config.make_name("TmpInstance")
     filters = f"Name=tag:Name,Values={stack}/{name}"
-    query = "'Reservations[*].Instances[*].[InstanceId]'"
+    query = "Reservations[*].Instances[*].[InstanceId]"
     result = c.run(
-        aws_cli("ec2 describe-instances", profile, filters=filters, query=query),
+        aws_cli(
+            "ec2 describe-instances",
+            profile,
+            filters=filters,
+            query=query,
+            output="text",
+        ),
         hide=True,
     )
     instances = result.stdout.strip().split()
