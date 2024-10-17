@@ -59,7 +59,7 @@ def _ssm_connect(c, config, command, service, profile):
             -1,
         )
     c.run(
-        aws_cli("ssm start-session", profile, target=instances[0]),
+        aws_cli("ssm start-session", profile, target=instances[0], command=command),
         echo=True,
         pty=True,
     )
