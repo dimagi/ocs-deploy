@@ -29,10 +29,17 @@ class DomainStack(cdk.Stack):
         )
 
     def create_email_identity(self, config):
+        configuration_set = ses.ConfigurationSet(
+            self,
+            config.make_name("SesConfigurationSet"),
+            configuration_set_name="Default",
+        )
+
         email_identity = ses.EmailIdentity(
             self,
             config.make_name("EmailIdentity"),
             identity=ses.Identity.domain(config.email_domain),
+            configuration_set=configuration_set,
         )
         email_identity.apply_removal_policy(cdk.RemovalPolicy.RETAIN)
 
