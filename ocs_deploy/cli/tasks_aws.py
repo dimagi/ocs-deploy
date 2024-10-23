@@ -136,7 +136,7 @@ def deploy(
     cmd = f"cdk deploy --profile {profile} --context ocs_env={config.environment}"
     if stacks:
         stacks = " ".join([config.stack_name(stack) for stack in stacks.split(",")])
-        cmd += f" {stacks}"
+        cmd += f"--exclusive {stacks}"
     else:
         confirm("Deploy all stacks ?", _exit=True, exit_message="Aborted")
         cmd += " --all"
