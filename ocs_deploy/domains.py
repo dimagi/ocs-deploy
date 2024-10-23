@@ -34,6 +34,7 @@ class DomainStack(cdk.Stack):
             config.make_name("EmailIdentity"),
             identity=ses.Identity.domain(config.email_domain),
         )
+        email_identity.apply_removal_policy(cdk.RemovalPolicy.RETAIN)
 
         for i, record in enumerate(email_identity.dkim_records):
             cdk.CfnOutput(
