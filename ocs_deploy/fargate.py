@@ -405,7 +405,7 @@ class FargateStack(cdk.Stack):
                 #     }
                 # },
                 effect=iam.Effect.ALLOW,
-                resources=[self.domain_stack.email_identity.email_identity_arn],
+                resources=["*"],
             )
         )
         return task_role
