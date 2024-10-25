@@ -26,7 +26,7 @@ SERVICES_HELP = "Services to target [ALL, django, celery, beat]. Separate multip
     | PROFILE_HELP,
     auto_shortflags=False,
 )
-def connect(c: Context, command="/bin/bash", service="django", profile=DEFAULT_PROFILE):
+def connect(c: Context, command="bash -l", service="django", profile=DEFAULT_PROFILE):
     """Connect to a running ECS container and execute the given command."""
     config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
@@ -59,7 +59,13 @@ def _ssm_connect(c, config, command, service, profile):
             -1,
         )
     c.run(
-        aws_cli("ssm start-session", profile, target=instances[0], command=command),
+        aws_cli(
+            "ssm start-session",
+            profile,
+            target=instances[0],
+            document_name="AWS-StartInteractiveCommand",
+            parameters=f"command={command}",
+        ),
         echo=True,
         pty=True,
     )
