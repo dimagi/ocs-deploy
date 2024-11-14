@@ -22,19 +22,20 @@ def aws_login(c: Context, profile=DEFAULT_PROFILE):
 
 
 @task
-def django_shell(c: Context, profile=DEFAULT_PROFILE):
-    """Login to a Django shell on the Django Fargate service.
-
-    This will connect to the first running task of the Django service.
+def django_manage(c: Context, command, profile=DEFAULT_PROFILE):
+    """Run a Django management command on the Django Fargate service.
 
     This is an alias of:
 
-        aws.connect --service django --command "python manage.py shell"
+        aws.connect --service django --command "python manage.py {command}"
     """
+    _shell(c, profile, command)
 
+
+def _shell(c: Context, profile=DEFAULT_PROFILE, mgmt_command="shell"):
     config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
-    _fargate_connect(c, config, "python manage.py shell", "django", profile)
+    _fargate_connect(c, config, f"python manage.py {mgmt_command}", "django", profile)
 
 
 def _check_credentials(c: Context, profile: str):
