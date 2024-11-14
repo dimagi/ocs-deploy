@@ -1,3 +1,4 @@
+import json
 import os
 import shlex
 
@@ -18,6 +19,22 @@ def aws_login(c: Context, profile=DEFAULT_PROFILE):
     """Login to AWS SSO."""
     result = c.run(aws_cli("sso login", profile), echo=True)
     return result.ok
+
+
+@task
+def django_shell(c: Context, profile=DEFAULT_PROFILE):
+    """Login to a Django shell on the Django Fargate service.
+
+    This will connect to the first running task of the Django service.
+
+    This is an alias of:
+
+        aws.connect --service django --command "python manage.py shell"
+    """
+
+    config = _get_config(c)
+    profile = get_profile_and_auth(c, profile)
+    _fargate_connect(c, config, "python manage.py shell", "django", profile)
 
 
 def _check_credentials(c: Context, profile: str):
@@ -76,3 +93,85 @@ class NoQuote(str):
     """A string that should not be quoted when passed to a shell command."""
 
     pass
+
+
+def _ssm_connect(c, config, command, service, profile):
+    stack = config.stack_name(OCSConfig.EC2_TMP_STACK)
+    name = config.make_name("TmpInstance")
+    filters = f"Name=tag:Name,Values={stack}/{name}"
+    query = "Reservations[*].Instances[*].[InstanceId]"
+    result = c.run(
+        aws_cli(
+            "ec2 describe-instances",
+            profile,
+            filters=filters,
+            query=query,
+            output="text",
+        ),
+        hide=True,
+    )
+    instances = result.stdout.strip().split()
+    if not instances:
+        raise Exit(
+            f"No instances of {service} were found.",
+            -1,
+        )
+    c.run(
+        aws_cli(
+            "ssm start-session",
+            profile,
+            target=instances[0],
+            document_name="AWS-StartInteractiveCommand",
+            parameters=f"command={command}",
+        ),
+        echo=True,
+        pty=True,
+    )
+
+
+def _fargate_connect(c: Context, config, command, service, profile):
+    cluster = config.make_name("Cluster")
+    service, container = _get_service_and_container(config, service)
+
+    result = c.run(
+        aws_cli("ecs list-tasks", profile, service=service, cluster=cluster),
+        hide=True,
+    )
+    response = json.loads(result.stdout)
+    tasks = response.get("taskArns", [])
+    if not tasks:
+        raise Exit(
+            f"No tasks found for the '{service}' service in the '{cluster}' cluster.",
+            -1,
+        )
+
+    fargate_task = tasks[0]
+    c.run(
+        aws_cli(
+            "ecs execute-command",
+            profile,
+            cluster=cluster,
+            task=fargate_task,
+            container=container,
+            command=command,
+            interactive=True,
+        ),
+        echo=True,
+        pty=True,
+    )
+
+
+def _get_service_and_container(config, service):
+    match service:
+        case "django":
+            service = config.make_name("Django")
+            container = "web"
+        case "celery":
+            service = config.make_name("Celery")
+            container = "celery-worker"
+        case "beat":
+            service = config.make_name("CeleryBeat")
+            container = "celery-beat"
+        case _:
+            raise Exit(f"Unknown service '{service}'", -1)
+    return service, container
