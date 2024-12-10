@@ -219,6 +219,8 @@ class FargateStack(cdk.Stack):
                 timeout=cdk.Duration.seconds(5),
                 retries=4,
             )
+            cpu = 256
+            memory = 512
         else:
             log_group_name = "CeleryWorkerLogs"
             name = "CeleryWorkerTask"
@@ -226,6 +228,8 @@ class FargateStack(cdk.Stack):
                 " "
             )
             container_name = "celery-worker"
+            cpu = 512
+            memory = 1024
             health_check = None  # disable for now
             # health_check = ecs.HealthCheck(
             #     command=[
@@ -247,8 +251,8 @@ class FargateStack(cdk.Stack):
         celery_task = ecs.FargateTaskDefinition(
             self,
             id=config.make_name(name),
-            cpu=512,
-            memory_limit_mib=1024,
+            cpu=cpu,
+            memory_limit_mib=memory,
             execution_role=self.execution_role,
             task_role=self.task_role,
             family=config.make_name(name),
