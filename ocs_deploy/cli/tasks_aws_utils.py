@@ -17,6 +17,17 @@ PROFILE_HELP = {
 @task(name="login", help=PROFILE_HELP)
 def aws_login(c: Context, profile=DEFAULT_PROFILE):
     """Login to AWS SSO."""
+    _get_config(c)
+    if not profile:
+        env = c.config.environment
+        cprint(
+            "AWS profile not set. You can pass it via '--profile' or the AWS_PROFILE env var.",
+            color="light_grey",
+        )
+        default = f"ocs-{env}"
+        profile = input(f"Enter profile: [Press enter to use '{default}'] ") or default
+
+    cprint(f"Using AWS profile: {profile}", color="blue")
     result = c.run(aws_cli("sso login", profile), echo=True)
     return result.ok
 
