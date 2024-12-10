@@ -228,8 +228,8 @@ class FargateStack(cdk.Stack):
                 " "
             )
             container_name = "celery-worker"
-            cpu = 512
-            memory = 1024
+            cpu = 256
+            memory = 2048
             health_check = None  # disable for now
             # health_check = ecs.HealthCheck(
             #     command=[
