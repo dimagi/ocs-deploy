@@ -172,6 +172,9 @@ After setting, deploy the Django service to include the new secret:
 ocs --env <env> aws.deploy --stack django
 ```
 
+If this step fails ensure that all secrets are set. To re-run this step you will need to manually delete the
+`$NAME-$ENV-CeleryWorkerLogs`, `$NAME-$ENV-DjangoLogs`, and `$NAME-$ENV-CeleryBeatLogs` log groups in CloudWatch.
+
 ## Other Useful CDK Commands
 
 - `cdk ls`: List all stacks in the app.
