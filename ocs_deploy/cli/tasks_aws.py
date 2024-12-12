@@ -58,16 +58,17 @@ def deploy(
     profile = get_profile_and_auth(c, profile)
 
     config = _get_config(c)
-    cmd = f"cdk deploy --profile {profile} --context ocs_env={config.environment}"
+    cmd = "cdk deploy"
     if stacks:
         stacks = " ".join([config.stack_name(stack) for stack in stacks.split(",")])
-        cmd += f"--exclusive {stacks}"
+        cmd += f" {stacks} --exclusive"
     else:
         confirm("Deploy all stacks ?", _exit=True, exit_message="Aborted")
         cmd += " --all"
     if verbose:
         cmd += " --verbose"
 
+    cmd += f" --profile {profile} --context ocs_env={config.environment}"
     cmd += " --require-approval " + ("never" if skip_approval else "any-change")
     cmd += " --progress events"
     c.run(cmd, echo=True, pty=True)
