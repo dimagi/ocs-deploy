@@ -58,6 +58,7 @@ class OCSConfig:
 
         self.taskbadger_org = config.get("TASKBADGER_ORG", "")
         self.taskbadger_project = config.get("TASKBADGER_PROJECT", "")
+        self.sentry_environment = config.get("SENTRY_ENVIRONMENT", "development")
 
         self.github_repo = config.get("GITHUB_REPO", "dimagi/open-chat-studio")
 

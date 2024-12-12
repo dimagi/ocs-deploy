@@ -327,6 +327,7 @@ class FargateStack(cdk.Stack):
             "WHATSAPP_S3_AUDIO_BUCKET": self.config.s3_whatsapp_audio_bucket,
             "TASKBADGER_ORG": self.config.taskbadger_org,
             "TASKBADGER_PROJECT": self.config.taskbadger_project,
+            "SENTRY_ENVIRONMENT": self.config.sentry_environment,
         }
 
     @cached_property
