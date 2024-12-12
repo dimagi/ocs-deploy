@@ -87,33 +87,28 @@ Edit the generated `.env.{env name}` file to set your required configurations.
 
 ### Deployment Steps
 
-1. **Set Up the ECR Repository**
+1. **Set Up RDS, Redis, S3 and the ECR repository**
 
     ```bash
-    ocs --env <env> aws.deploy -s ecr -v
+    ocs --env <env> aws.deploy --stacks ec2tmp,rds,redis,s3,ecr
     ```
-
-    Next, push the initial version of the Docker image to the registry:
+   
+2. Next, push the initial version of the Docker image to the registry:
 
     ```bash
     export AWS_ACCOUNT_ID=xxx \
       && export AWS_REGION=us-east-1 \
-      && export OCS_ENV=<env> \
-      && export OCS_NAME=<name> \
+      && export AWS_PROFILE=xxx \
+      && export OCS_ENV=<env e.g. dev> \
+      && export OCS_NAME=<name e.g. chatbots> \
       && export REGISTRY=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com \
       && export IMAGE=$REGISTRY/$OCS_NAME-$OCS_ENV-ecr-repo
-    docker build . -t "$IMAGE:latest" -f Dockerfile.web
+    docker build . -t "$IMAGE:latest" -f Dockerfile
     aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REGISTRY
     docker push "$IMAGE" --all-tags
     ```
 
     For more details on Docker image pushing, visit the [AWS ECR documentation](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html).
-
-2. **Set Up RDS, Redis, and S3**
-
-    ```bash
-    ocs --env <env> aws.deploy --stacks ec2tmp,rds,redis,s3
-    ```
 
 3. **Set Up Domains and GitHub Roles**
 
