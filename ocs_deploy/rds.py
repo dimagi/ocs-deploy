@@ -61,7 +61,7 @@ class RdsStack(cdk.Stack):
             ),
             # db.t4g.small
             instance_type=ec2.InstanceType.of(
-                ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.SMALL
+                ec2.InstanceClass.T4G, ec2.InstanceSize.SMALL
             ),
             allocated_storage=20,
             max_allocated_storage=100,
