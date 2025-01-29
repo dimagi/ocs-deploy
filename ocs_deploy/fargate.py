@@ -86,15 +86,16 @@ class FargateStack(cdk.Stack):
         )
 
         # Setup AutoScaling policy
+        # See https://blog.cloudglance.dev/deep-dive-on-ecs-desired-count-and-circuit-breaker-rollback/index.html
         scaling = django_web_service.service.auto_scale_task_count(
-            max_capacity=2,
-            min_capacity=1,
+            max_capacity=5,
+            min_capacity=2,
         )
         scaling.scale_on_cpu_utilization(
             config.make_name("CpuScaling"),
-            target_utilization_percent=70,
-            scale_in_cooldown=cdk.Duration.seconds(60),
-            scale_out_cooldown=cdk.Duration.seconds(60),
+            target_utilization_percent=50,
+            scale_in_cooldown=cdk.Duration.seconds(120),
+            scale_out_cooldown=cdk.Duration.seconds(120),
         )
 
         # print out fargateService load balancer url
@@ -404,11 +405,6 @@ class FargateStack(cdk.Stack):
                     "ses:SendRawEmail",
                     "ses:SendBulkEmail",
                 ],
-                # conditions={
-                #     "StringLike": {
-                #         "ses:FromAddress": "noreply@dimagi.com"
-                #     }
-                # },
                 effect=iam.Effect.ALLOW,
                 resources=["*"],
             )
