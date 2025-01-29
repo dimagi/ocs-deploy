@@ -68,12 +68,14 @@ class FargateStack(cdk.Stack):
             cluster_name=config.ecs_cluster_name,
         )
 
+        # See https://blog.cloudglance.dev/deep-dive-on-ecs-desired-count-and-circuit-breaker-rollback/index.html
+        django_max_capacity = 5
         django_web_service = ecs_patterns.ApplicationLoadBalancedFargateService(
             self,
             config.make_name("DjangoWebService"),
             cluster=cluster,
             security_groups=[http_sg, https_sg],
-            desired_count=1,
+            desired_count=django_max_capacity,
             public_load_balancer=True,
             load_balancer_name=config.make_name("LoadBalancer"),
             service_name=config.ecs_django_service_name,
@@ -87,14 +89,14 @@ class FargateStack(cdk.Stack):
 
         # Setup AutoScaling policy
         scaling = django_web_service.service.auto_scale_task_count(
-            max_capacity=2,
-            min_capacity=1,
+            max_capacity=django_max_capacity,
+            min_capacity=2,
         )
         scaling.scale_on_cpu_utilization(
             config.make_name("CpuScaling"),
-            target_utilization_percent=70,
-            scale_in_cooldown=cdk.Duration.seconds(60),
-            scale_out_cooldown=cdk.Duration.seconds(60),
+            target_utilization_percent=50,
+            scale_in_cooldown=cdk.Duration.seconds(120),
+            scale_out_cooldown=cdk.Duration.seconds(120),
         )
 
         # print out fargateService load balancer url
@@ -104,17 +106,30 @@ class FargateStack(cdk.Stack):
             value=django_web_service.load_balancer.load_balancer_dns_name,
         )
 
-        ecs.FargateService(
+        # See https://blog.cloudglance.dev/deep-dive-on-ecs-desired-count-and-circuit-breaker-rollback/index.html
+        celery_max_capacity = 5
+        celery_worker_service = ecs.FargateService(
             self,
             config.make_name("CeleryService"),
             cluster=cluster,
-            desired_count=1,
+            desired_count=celery_max_capacity,
             service_name=config.ecs_celery_service_name,
             task_definition=self._get_celery_task_definition(
                 ecr_repo, config, is_beat=False
             ),
             enable_execute_command=True,
             circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
+        )
+
+        celery_scaling = celery_worker_service.auto_scale_task_count(
+            max_capacity=celery_max_capacity,
+            min_capacity=2,
+        )
+        celery_scaling.scale_on_cpu_utilization(
+            config.make_name("CeleryCpuScaling"),
+            target_utilization_percent=50,
+            scale_in_cooldown=cdk.Duration.seconds(120),
+            scale_out_cooldown=cdk.Duration.seconds(120),
         )
 
         ecs.FargateService(
@@ -136,7 +151,7 @@ class FargateStack(cdk.Stack):
         return django_web_service
 
     def _get_web_task_definition(self, ecr_repo, config: OCSConfig):
-        log_group = self._get_log_group(config.make_name("DjangoLogs"))
+        log_group = self._get_log_group(config.make_name(config.LOG_GROUP_DJANGO))
         log_driver = ecs.AwsLogDriver(
             stream_prefix=config.make_name(), log_group=log_group
         )
@@ -203,7 +218,7 @@ class FargateStack(cdk.Stack):
 
     def _get_celery_task_definition(self, ecr_repo, config: OCSConfig, is_beat):
         if is_beat:
-            log_group_name = "CeleryBeatLogs"
+            log_group_name = config.LOG_GROUP_BEAT
             name = "CeleryBeatTask"
             pidfile = "/tmp/celerybeat.pid"
             command = (
@@ -222,7 +237,7 @@ class FargateStack(cdk.Stack):
             cpu = 256
             memory = 512
         else:
-            log_group_name = "CeleryWorkerLogs"
+            log_group_name = config.LOG_GROUP_CELERY
             name = "CeleryWorkerTask"
             command = "celery -A gpt_playground worker -l INFO --pool gevent --concurrency 100".split(
                 " "
@@ -404,11 +419,6 @@ class FargateStack(cdk.Stack):
                     "ses:SendRawEmail",
                     "ses:SendBulkEmail",
                 ],
-                # conditions={
-                #     "StringLike": {
-                #         "ses:FromAddress": "noreply@dimagi.com"
-                #     }
-                # },
                 effect=iam.Effect.ALLOW,
                 resources=["*"],
             )

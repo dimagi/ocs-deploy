@@ -49,6 +49,34 @@ def _shell(c: Context, profile=DEFAULT_PROFILE, mgmt_command="shell"):
     _fargate_connect(c, config, f"python manage.py {mgmt_command}", "django", profile)
 
 
+@task(
+    help={
+        "service": "The service to retrieve logs for. One of 'django', 'celery', or 'beat'.",
+        "follow": "Follow the logs.",
+        "since": "How far back to fetch logs. Ex: 1h, 30m, 10s.",
+        **PROFILE_HELP,
+    }
+)
+def tail(
+    c: Context, service="django", follow=False, since=None, profile=DEFAULT_PROFILE
+):
+    """Tail the logs of a Fargate service."""
+    config = _get_config(c)
+    profile = get_profile_and_auth(c, profile)
+    log_group = {
+        "django": config.LOG_GROUP_DJANGO,
+        "celery": config.LOG_GROUP_CELERY,
+        "beat": config.LOG_GROUP_BEAT,
+    }[service]
+    log_group_name = config.make_name(log_group)
+    cmd = f"aws logs tail {log_group_name} --profile {profile}"
+    if follow:
+        cmd += " --follow"
+    if since:
+        cmd += f" --since {since}"
+    c.run(cmd, echo=True, pty=True)
+
+
 def _check_credentials(c: Context, profile: str):
     result = c.run(aws_cli("sts get-caller-identity", profile), warn=True, hide=True)
     return result.ok

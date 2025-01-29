@@ -8,7 +8,7 @@ from termcolor import cprint
 
 from ocs_deploy.cli import tasks_aws
 from ocs_deploy.cli import tasks_secrets
-from ocs_deploy.cli.tasks_aws_utils import aws_login, django_manage
+from ocs_deploy.cli.tasks_aws_utils import aws_login, django_manage, tail
 
 
 @task
@@ -40,6 +40,7 @@ namespace = Collection(
     init,
     ruff,
     django_manage,
+    tail,
     Collection.from_module(tasks_secrets, name="secrets"),
     aws_collection,
 )
