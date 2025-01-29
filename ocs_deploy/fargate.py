@@ -151,7 +151,7 @@ class FargateStack(cdk.Stack):
         return django_web_service
 
     def _get_web_task_definition(self, ecr_repo, config: OCSConfig):
-        log_group = self._get_log_group(config.make_name("DjangoLogs"))
+        log_group = self._get_log_group(config.make_name(config.LOG_GROUP_DJANGO))
         log_driver = ecs.AwsLogDriver(
             stream_prefix=config.make_name(), log_group=log_group
         )
@@ -218,7 +218,7 @@ class FargateStack(cdk.Stack):
 
     def _get_celery_task_definition(self, ecr_repo, config: OCSConfig, is_beat):
         if is_beat:
-            log_group_name = "CeleryBeatLogs"
+            log_group_name = config.LOG_GROUP_BEAT
             name = "CeleryBeatTask"
             pidfile = "/tmp/celerybeat.pid"
             command = (
@@ -237,7 +237,7 @@ class FargateStack(cdk.Stack):
             cpu = 256
             memory = 512
         else:
-            log_group_name = "CeleryWorkerLogs"
+            log_group_name = config.LOG_GROUP_CELERY
             name = "CeleryWorkerTask"
             command = "celery -A gpt_playground worker -l INFO --pool gevent --concurrency 100".split(
                 " "

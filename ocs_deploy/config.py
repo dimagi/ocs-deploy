@@ -30,6 +30,10 @@ class OCSConfig:
         DJANGO_STACK,
     ]
 
+    LOG_GROUP_DJANGO = "DjangoLogs"
+    LOG_GROUP_CELERY = "CeleryWorkerLogs"
+    LOG_GROUP_BEAT = "CeleryBeatLogs"
+
     def __init__(self, env: str):
         if not env:
             raise Exception("No environment specified")
