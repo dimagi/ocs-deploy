@@ -105,7 +105,7 @@ class FargateStack(cdk.Stack):
             value=django_web_service.load_balancer.load_balancer_dns_name,
         )
 
-        ecs.FargateService(
+        celery_worker_service = ecs.FargateService(
             self,
             config.make_name("CeleryService"),
             cluster=cluster,
@@ -116,6 +116,17 @@ class FargateStack(cdk.Stack):
             ),
             enable_execute_command=True,
             circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
+        )
+
+        celery_scaling = celery_worker_service.auto_scale_task_count(
+            max_capacity=5,
+            min_capacity=2,
+        )
+        celery_scaling.scale_on_cpu_utilization(
+            config.make_name("CeleryCpuScaling"),
+            target_utilization_percent=50,
+            scale_in_cooldown=cdk.Duration.seconds(120),
+            scale_out_cooldown=cdk.Duration.seconds(120),
         )
 
         ecs.FargateService(
