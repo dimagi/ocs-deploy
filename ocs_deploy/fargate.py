@@ -68,12 +68,14 @@ class FargateStack(cdk.Stack):
             cluster_name=config.ecs_cluster_name,
         )
 
+        # See https://blog.cloudglance.dev/deep-dive-on-ecs-desired-count-and-circuit-breaker-rollback/index.html
+        django_max_capacity = 5
         django_web_service = ecs_patterns.ApplicationLoadBalancedFargateService(
             self,
             config.make_name("DjangoWebService"),
             cluster=cluster,
             security_groups=[http_sg, https_sg],
-            desired_count=1,
+            desired_count=django_max_capacity,
             public_load_balancer=True,
             load_balancer_name=config.make_name("LoadBalancer"),
             service_name=config.ecs_django_service_name,
@@ -86,9 +88,8 @@ class FargateStack(cdk.Stack):
         )
 
         # Setup AutoScaling policy
-        # See https://blog.cloudglance.dev/deep-dive-on-ecs-desired-count-and-circuit-breaker-rollback/index.html
         scaling = django_web_service.service.auto_scale_task_count(
-            max_capacity=5,
+            max_capacity=django_max_capacity,
             min_capacity=2,
         )
         scaling.scale_on_cpu_utilization(
@@ -105,11 +106,13 @@ class FargateStack(cdk.Stack):
             value=django_web_service.load_balancer.load_balancer_dns_name,
         )
 
+        # See https://blog.cloudglance.dev/deep-dive-on-ecs-desired-count-and-circuit-breaker-rollback/index.html
+        celery_max_capacity = 5
         celery_worker_service = ecs.FargateService(
             self,
             config.make_name("CeleryService"),
             cluster=cluster,
-            desired_count=1,
+            desired_count=celery_max_capacity,
             service_name=config.ecs_celery_service_name,
             task_definition=self._get_celery_task_definition(
                 ecr_repo, config, is_beat=False
@@ -119,7 +122,7 @@ class FargateStack(cdk.Stack):
         )
 
         celery_scaling = celery_worker_service.auto_scale_task_count(
-            max_capacity=5,
+            max_capacity=celery_max_capacity,
             min_capacity=2,
         )
         celery_scaling.scale_on_cpu_utilization(
