@@ -1,6 +1,6 @@
 # Open Chat Studio CDK Deploy
 
-This project contains the AWS Cloud Development Kit (CDK) stack for deploying the 
+This project contains the AWS Cloud Development Kit (CDK) stack for deploying the
 [Open Chat Studio](https://github.com/dimagi/open-chat-studio/) infrastructure.
 
 ## Table of Contents
@@ -10,9 +10,10 @@ This project contains the AWS Cloud Development Kit (CDK) stack for deploying th
 4. [First Time Deployment Steps](#first-time-deployment-steps)
 5. [Steady State Deployment Steps](#steady-state-deployment-steps)
 6. [Connecting to Running Services](#connecting-to-running-services)
-7. [Adding Environment Variables](#adding-environment-variables)
-8. [Other Useful CDK Commands](#other-useful-cdk-commands)
-9. [Troubleshooting](#troubleshooting)
+7. [Managing Multiple Environments](#managing-multiple-environments)
+8. [Adding Environment Variables](#adding-environment-variables)
+9. [Other Useful CDK Commands](#other-useful-cdk-commands)
+10. [Troubleshooting](#troubleshooting)
 
 ## Architecture Overview
 
@@ -74,7 +75,7 @@ Edit the generated `.env.{env name}` file to set your required configurations.
 ### Prerequisites
 
 - You have an AWS account with the necessary permissions and configured SSO.
-- You have the correct AWS profile set:
+- You have the correct AWS profile set. The `--profile X` argument can also be used via the command line, and the default profile is `ocs-{env name}`.
   ```bash
   export AWS_PROFILE=XXX
   ```
@@ -141,6 +142,25 @@ To connect to a running service, use the `ocs connect` command:
 ```bash
 ocs --env <env> connect  # Default command is /bin/bash
 ocs --env <env> connect --command "python manage.py shell"
+```
+
+## Managing Multiple Environments
+
+This project supports multiple deployment environments (e.g., `dev`, `prod`) using separate `.env` files:
+
+- `.env.dev` for the development environment
+- `.env.prod` for the production environment
+
+The environment name is passed using the `--env` argument, e.g.:
+
+```bash
+ocs --env dev aws.deploy
+```
+
+The environment name is also used to set the default AWS CLI profile:
+
+```bash
+AWS_PROFILE="ocs-<env>"  # e.g., "ocs-dev"
 ```
 
 ## Adding Environment Variables
