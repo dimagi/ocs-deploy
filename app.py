@@ -12,6 +12,7 @@ from ocs_deploy.rds import RdsStack
 from ocs_deploy.redis import RedisStack
 from ocs_deploy.s3 import S3Stack
 from ocs_deploy.vpc import VpcStack
+from ocs_deploy.waf import WAFStack
 
 app = cdk.App()
 env = app.node.try_get_context("ocs_env")
@@ -36,6 +37,9 @@ redis_stack.add_dependency(vpc_stack)
 ocs_services = FargateStack(
     app, vpc_stack.vpc, ecr_stack.repo, rds_stack, redis_stack, domain_stack, config
 )
+waf_stack = WAFStack(app, config, ocs_services.load_balancer_arn)
+waf_stack.add_dependency(ocs_services)
+
 ocs_services.add_dependency(vpc_stack)
 ocs_services.add_dependency(ecr_stack)
 ocs_services.add_dependency(rds_stack)

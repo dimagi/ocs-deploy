@@ -17,7 +17,7 @@ class WAFStack(Stack):
         **kwargs
     ) -> None:
         super().__init__(
-            scope, config.stack_name("waf"), env=config.cdk_env(), **kwargs
+            scope, config.stack_name(OCSConfig.WAF_STACK), env=config.cdk_env(), **kwargs
         )
         self.config = config
 
