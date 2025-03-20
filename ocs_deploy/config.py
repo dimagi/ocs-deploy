@@ -17,6 +17,7 @@ class OCSConfig:
     RDS_STACK = "rds"
     REDIS_STACK = "redis"
     DJANGO_STACK = "django"
+    WAF_STACK = "waf"
 
     ALL_STACKS = [
         GITHUB_STACK,
@@ -28,6 +29,7 @@ class OCSConfig:
         RDS_STACK,
         REDIS_STACK,
         DJANGO_STACK,
+        WAF_STACK,
     ]
 
     LOG_GROUP_DJANGO = "DjangoLogs"
