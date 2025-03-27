@@ -44,7 +44,7 @@ class WAFStack(Stack):
                             name="AWSManagedRulesCommonRuleSet",
                         )
                     ),
-                    override_action=wafv2.CfnWebACL.OverrideActionProperty(none={}),
+                    action=wafv2.CfnWebACL.RuleActionProperty(count={}),  # Changed to count
                     visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
                         cloud_watch_metrics_enabled=True,
                         metric_name=config.make_name("CommonRuleSetMetrics"),
@@ -52,6 +52,7 @@ class WAFStack(Stack):
                     ),
                 ),
                 # Rule 2: Rate Limiting (2000 requests per 5 minutes per IP)
+
                 wafv2.CfnWebACL.RuleProperty(
                     name="RateLimitRule",
                     priority=1,
@@ -61,7 +62,7 @@ class WAFStack(Stack):
                             aggregate_key_type="IP",
                         )
                     ),
-                    action=wafv2.CfnWebACL.RuleActionProperty(block={}),
+                    action=wafv2.CfnWebACL.RuleActionProperty(count={}),  # Changed to count
                     visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
                         cloud_watch_metrics_enabled=True,
                         metric_name=config.make_name("RateLimitMetrics"),
