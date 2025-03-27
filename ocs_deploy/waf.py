@@ -34,7 +34,7 @@ class WAFStack(Stack):
                 sampled_requests_enabled=True,
             ),
             rules=[
-                # Rule 1: AWS Managed Common Rule Set
+                # Rule 1: AWS Managed Common Rule Set (Count mode)
                 wafv2.CfnWebACL.RuleProperty(
                     name="AWSManagedCommonRuleSet",
                     priority=0,
@@ -44,21 +44,20 @@ class WAFStack(Stack):
                             name="AWSManagedRulesCommonRuleSet",
                         )
                     ),
-                    action=wafv2.CfnWebACL.RuleActionProperty(count={}),  # Changed to count
+                    override_action=wafv2.CfnWebACL.OverrideActionProperty(count={}),   # Changed to count
                     visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
                         cloud_watch_metrics_enabled=True,
                         metric_name=config.make_name("CommonRuleSetMetrics"),
                         sampled_requests_enabled=True,
                     ),
                 ),
-                # Rule 2: Rate Limiting (2000 requests per 5 minutes per IP)
-
+                # Rule 2: Rate Limiting (Count mode, 2000 requests per 5 minutes per IP)
                 wafv2.CfnWebACL.RuleProperty(
                     name="RateLimitRule",
                     priority=1,
                     statement=wafv2.CfnWebACL.StatementProperty(
                         rate_based_statement=wafv2.CfnWebACL.RateBasedStatementProperty(
-                            limit=2000,  # 2000 requests per 5-minute window
+                            limit=2000,
                             aggregate_key_type="IP",
                         )
                     ),
