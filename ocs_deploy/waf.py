@@ -1,5 +1,5 @@
 ﻿# ocs_deploy/stacks/waf.py
-from aws_cdk import Stack, aws_wafv2 as wafv2, CfnOutput
+from aws_cdk import Stack, RemovalPolicy, aws_wafv2 as wafv2, CfnOutput, aws_logs as logs
 from constructs import Construct
 from ocs_deploy.config import OCSConfig
 
@@ -78,6 +78,22 @@ class WAFStack(Stack):
             web_acl_arn=self.web_acl.attr_arn,
             resource_arn=load_balancer_arn,
         )
+        # Create a CloudWatch Log Group for WAF logs
+        log_group = logs.LogGroup(
+            self,
+            "WAFLogGroup",
+            log_group_name=config.make_name("WAFLogs"),
+            retention=logs.RetentionDays.TWO_YEARS,  # Matches your Fargate log retention
+            removal_policy=RemovalPolicy.RETAIN,
+        )
+
+        # Add WAF Logging Configuration
+        wafv2.CfnLoggingConfiguration(
+            self,
+            "WAFLoggingConfig",
+            resource_arn=self.web_acl.attr_arn,
+            log_destination_configs=[log_group.log_group_arn],
+        )
 
         # Output the Web ACL ARN
         CfnOutput(
@@ -85,4 +101,11 @@ class WAFStack(Stack):
             config.make_name("WebACLArn"),
             value=self.web_acl.attr_arn,
             description="ARN of the WAF Web ACL",
+        )
+        # Output the Log Group ARN
+        CfnOutput(
+            self,
+            config.make_name("WAFLogGroupArn"),
+            value=log_group.log_group_arn,
+            description="ARN of the WAF Log Group",
         )
