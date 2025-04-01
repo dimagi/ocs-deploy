@@ -1,12 +1,12 @@
 ﻿# ocs_deploy/stacks/waf.py
-from aws_cdk import Stack, RemovalPolicy, aws_wafv2 as wafv2, CfnOutput, aws_logs as logs
+from aws_cdk import Stack, RemovalPolicy, aws_wafv2 as wafv2, aws_logs as logs, aws_iam as iam, CfnOutput
 from constructs import Construct
 from ocs_deploy.config import OCSConfig
 
 class WAFStack(Stack):
     """
     Represents a CDK stack for deploying a WAF Web ACL associated with an Application Load Balancer.
-    Includes AWS Managed Rules and rate limiting for the Django app.
+    Includes AWS Managed Rules and rate limiting in count mode, with logging to CloudWatch.
     """
 
     def __init__(
@@ -17,7 +17,7 @@ class WAFStack(Stack):
         **kwargs
     ) -> None:
         super().__init__(
-            scope, config.stack_name(OCSConfig.WAF_STACK), env=config.cdk_env(), **kwargs
+            scope, config.stack_name("waf"), env=config.cdk_env(), **kwargs
         )
         self.config = config
 
@@ -44,14 +44,14 @@ class WAFStack(Stack):
                             name="AWSManagedRulesCommonRuleSet",
                         )
                     ),
-                    override_action=wafv2.CfnWebACL.OverrideActionProperty(count={}),   # Changed to count
+                    override_action=wafv2.CfnWebACL.OverrideActionProperty(count={}),
                     visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
                         cloud_watch_metrics_enabled=True,
                         metric_name=config.make_name("CommonRuleSetMetrics"),
                         sampled_requests_enabled=True,
                     ),
                 ),
-                # Rule 2: Rate Limiting (Count mode, 2000 requests per 5 minutes per IP)
+                # Rule 2: Rate Limiting (Count mode)
                 wafv2.CfnWebACL.RuleProperty(
                     name="RateLimitRule",
                     priority=1,
@@ -61,7 +61,7 @@ class WAFStack(Stack):
                             aggregate_key_type="IP",
                         )
                     ),
-                    action=wafv2.CfnWebACL.RuleActionProperty(count={}),  # Changed to count
+                    action=wafv2.CfnWebACL.RuleActionProperty(count={}),
                     visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
                         cloud_watch_metrics_enabled=True,
                         metric_name=config.make_name("RateLimitMetrics"),
@@ -78,22 +78,35 @@ class WAFStack(Stack):
             web_acl_arn=self.web_acl.attr_arn,
             resource_arn=load_balancer_arn,
         )
-        # Create a CloudWatch Log Group for WAF logs
+
+        # Create a CloudWatch Log Group for WAF logs with the required prefix
         log_group = logs.LogGroup(
             self,
             "WAFLogGroup",
-            log_group_name=config.make_name("WAFLogs"),
-            retention=logs.RetentionDays.TWO_YEARS,  # Matches your Fargate log retention
+            log_group_name=f"aws-waf-logs-{config.make_name('waf-logs')}",
+            retention=logs.RetentionDays.TWO_YEARS,
             removal_policy=RemovalPolicy.RETAIN,
         )
 
+        # Add a resource policy to allow WAF to write logs
+        log_group.add_to_resource_policy(
+            statement=iam.PolicyStatement(
+                actions=["logs:CreateLogStream", "logs:PutLogEvents"],
+                principals=[iam.ServicePrincipal("wafv2.amazonaws.com")],
+                resources=[log_group.log_group_arn],
+            )
+        )
+
         # Add WAF Logging Configuration
-        wafv2.CfnLoggingConfiguration(
+        logging_config = wafv2.CfnLoggingConfiguration(
             self,
             "WAFLoggingConfig",
             resource_arn=self.web_acl.attr_arn,
-            log_destination_configs=[log_group.log_group_arn],
+            log_destination_configs=[log_group.log_group_arn.replace(":*", "")],
         )
+
+        # Ensure the log group policy is applied before the logging configuration
+        logging_config.node.add_dependency(log_group)
 
         # Output the Web ACL ARN
         CfnOutput(
@@ -102,6 +115,7 @@ class WAFStack(Stack):
             value=self.web_acl.attr_arn,
             description="ARN of the WAF Web ACL",
         )
+
         # Output the Log Group ARN
         CfnOutput(
             self,
