@@ -47,6 +47,8 @@ class FargateStack(cdk.Stack):
         self.domain_stack = domain_stack
 
         self.fargate_service = self.setup_fargate_service(vpc, ecr_repo, config)
+        # Expose ALB ARN for WAF
+        self.load_balancer_arn = self.fargate_service.load_balancer.load_balancer_arn
 
     def setup_fargate_service(self, vpc, ecr_repo, config: OCSConfig):
         http_sg = ec2.SecurityGroup(
