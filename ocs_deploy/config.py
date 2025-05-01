@@ -18,6 +18,9 @@ class OCSConfig:
     REDIS_STACK = "redis"
     DJANGO_STACK = "django"
     WAF_STACK = "waf"
+    GUARD_DUTY_STACK = "guardduty"
+    SECURITYHUB_STACK = "securityhub"
+    DETECTIVE_STACK = "detective"
 
     ALL_STACKS = [
         GITHUB_STACK,
@@ -30,6 +33,9 @@ class OCSConfig:
         REDIS_STACK,
         DJANGO_STACK,
         WAF_STACK,
+        GUARD_DUTY_STACK,
+        SECURITYHUB_STACK,
+        DETECTIVE_STACK,
     ]
 
     LOG_GROUP_DJANGO = "DjangoLogs"
