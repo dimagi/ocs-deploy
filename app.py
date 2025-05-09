@@ -44,13 +44,10 @@ waf_stack = WAFStack(app, config, ocs_services.load_balancer_arn)
 waf_stack.add_dependency(ocs_services)
 
 guardduty_stack = GuardDutyStack(app, config)
-guardduty_stack.add_dependency(ocs_services)
 
 securityhub_stack = SecurityHubStack(app, config)
-securityhub_stack.add_dependency(ocs_services)
 
-DetectiveStack = DetectiveStack(app, config)
-DetectiveStack.add_dependency(ocs_services)
+detectiveStack = DetectiveStack(app, config)
 
 ocs_services.add_dependency(vpc_stack)
 ocs_services.add_dependency(ecr_stack)

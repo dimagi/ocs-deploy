@@ -7,7 +7,6 @@ class SecurityHubStack(Stack):
         super().__init__(scope, config.stack_name("securityhub"), env=config.cdk_env(), **kwargs)
         self.config = config
         self.hub = self.enable_security_hub()
-       # self.enable_standards()
 
     # Enables Security Hub with auto-enabled controls for new services and integrations
     def enable_security_hub(self) -> securityhub.CfnHub:
@@ -25,19 +24,17 @@ class SecurityHubStack(Stack):
         )
         return hub
 
-    # Subscribes to CIS AWS Foundations Benchmark v1.2.0 and AWS Foundational Security Best Practices v1.0.0
-    def enable_standards(self) -> None:
-        '''
-        cis_v1_2_0 = securityhub.CfnProductSubscription(
+        standards_subscription = securityhub.CfnStandardsSubscription(
             self,
-            "CISAWSFoundationsBenchmarkV1_2_0",
-            product_arn="arn:aws:securityhub:us-east-1::standards/cis-aws-foundations-benchmark/v/1.2.0",
+            "FoundationalSecurityBestPractices",
+            standards_arn=f"arn:aws:securityhub:{self.region}::standards/aws-foundational-security-best-practices/v/1.0.0",
         )
-        aws_foundational = securityhub.CfnProductSubscription(
+        # Ensure the subscription is created after Security Hub is enabled
+        standards_subscription.node.add_dependency(self.hub)
+        CfnOutput(
             self,
-            "AWSFoundationalSecurityBestPractices",
-            product_arn="arn:aws:securityhub:us-east-1::standards/aws-foundational-security-best-practices/v/1.0.0",
+            self.config.make_name("SecurityHubStandardsSubscriptionArn"),
+            value=standards_subscription.attr_standards_subscription_arn,
+            description="ARN of the AWS Foundational Security Best Practices subscription",
         )
-        cis_v1_2_0.node.add_dependency(self.hub)
-        aws_foundational.node.add_dependency(self.hub)
-        '''
+        return standards_subscription
