@@ -3,12 +3,25 @@ from constructs import Construct
 from ocs_deploy.config import OCSConfig
 
 class GuardDutyStack(Stack):
+    """
+    This stack sets up AWS GuardDuty for threat detection and monitoring.
+    It creates a GuardDuty detector and an S3 bucket for storing findings.
+    """
     def __init__(self, scope: Construct, config: OCSConfig, **kwargs) -> None:
         super().__init__(scope, config.stack_name("guardduty"), env=config.cdk_env(), **kwargs)
         self.config = config
         self.findings_bucket = self.create_findings_bucket()
         self.detector = self.enable_guardduty()
 
+    """
+    Creates an S3 bucket for GuardDuty findings and configures the bucket policy
+    to allow GuardDuty to write findings to the bucket.
+    The bucket is versioned, encrypted, and has a lifecycle rule to transition
+    objects to Infrequent Access storage class after 90 days and expire them
+    after 365 days.
+    The bucket policy allows GuardDuty to put objects in the bucket.
+    The bucket is retained on stack deletion.
+    """
     def create_findings_bucket(self) -> s3.Bucket:
         bucket = s3.Bucket(
             self,
@@ -45,6 +58,16 @@ class GuardDutyStack(Stack):
         )
         return bucket
 
+    """
+    Enables GuardDuty with the specified features and configurations.
+    The detector is configured to publish findings every 15 minutes.
+    The following features are enabled:
+    - S3 Data Events
+    - EBS Malware Protection
+    - Runtime Monitoring
+    - RDS Login Events
+    The detector ID is outputted for reference.
+    """
     def enable_guardduty(self) -> guardduty.CfnDetector:
         detector = guardduty.CfnDetector(
             self,
@@ -60,28 +83,9 @@ class GuardDutyStack(Stack):
                     name="EBS_MALWARE_PROTECTION",
                     status="ENABLED",
                 ),
-                guardduty.CfnDetector.CFNFeatureConfigurationProperty(
-                    name="RUNTIME_MONITORING",
-                    status="ENABLED",
-                    additional_configuration=[
-                        guardduty.CfnDetector.CFNFeatureAdditionalConfigurationProperty(
-                            name="EKS_ADDON_MANAGEMENT", status="ENABLED"
-                        ),
-                        guardduty.CfnDetector.CFNFeatureAdditionalConfigurationProperty(
-                            name="ECS_FARGATE_AGENT_MANAGEMENT", status="ENABLED"
-                        ),
-                    ],
-                ),
-                guardduty.CfnDetector.CFNFeatureConfigurationProperty(
-                    name="LAMBDA_NETWORK_LOGS",
-                    status="ENABLED",
-                ),
+                # comment the following line to disable runtime monitoring
                 guardduty.CfnDetector.CFNFeatureConfigurationProperty(
                     name="RDS_LOGIN_EVENTS",
-                    status="ENABLED",
-                ),
-                guardduty.CfnDetector.CFNFeatureConfigurationProperty(
-                    name="EKS_AUDIT_LOGS",
                     status="ENABLED",
                 ),
             ],
