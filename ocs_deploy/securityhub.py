@@ -23,18 +23,3 @@ class SecurityHubStack(Stack):
             description="ARN of the Security Hub",
         )
         return hub
-
-        standards_subscription = securityhub.CfnStandardsSubscription(
-            self,
-            "FoundationalSecurityBestPractices",
-            standards_arn=f"arn:aws:securityhub:{self.region}::standards/aws-foundational-security-best-practices/v/1.0.0",
-        )
-        # Ensure the subscription is created after Security Hub is enabled
-        standards_subscription.node.add_dependency(self.hub)
-        CfnOutput(
-            self,
-            self.config.make_name("SecurityHubStandardsSubscriptionArn"),
-            value=standards_subscription.attr_standards_subscription_arn,
-            description="ARN of the AWS Foundational Security Best Practices subscription",
-        )
-        return standards_subscription
