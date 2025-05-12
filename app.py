@@ -13,6 +13,9 @@ from ocs_deploy.redis import RedisStack
 from ocs_deploy.s3 import S3Stack
 from ocs_deploy.vpc import VpcStack
 from ocs_deploy.waf import WAFStack
+from ocs_deploy.guardDuty import GuardDutyStack
+from ocs_deploy.securityhub import SecurityHubStack
+from ocs_deploy.detective import DetectiveStack
 
 app = cdk.App()
 env = app.node.try_get_context("ocs_env")
@@ -39,6 +42,12 @@ ocs_services = FargateStack(
 )
 waf_stack = WAFStack(app, config, ocs_services.load_balancer_arn)
 waf_stack.add_dependency(ocs_services)
+
+guardduty_stack = GuardDutyStack(app, config)
+
+securityhub_stack = SecurityHubStack(app, config)
+
+detectiveStack = DetectiveStack(app, config)
 
 ocs_services.add_dependency(vpc_stack)
 ocs_services.add_dependency(ecr_stack)
