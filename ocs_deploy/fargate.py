@@ -162,8 +162,8 @@ class FargateStack(cdk.Stack):
         django_task = ecs.FargateTaskDefinition(
             self,
             id=config.make_name("Django"),
-            cpu=512,
-            memory_limit_mib=1024,
+            cpu=1024,  # 1 vCPU
+            memory_limit_mib=2048,  # 2 GB memory
             execution_role=self.execution_role,
             task_role=self.task_role,
             family=config.make_name("Django"),
@@ -245,7 +245,7 @@ class FargateStack(cdk.Stack):
                 " "
             )
             container_name = "celery-worker"
-            cpu = 256
+            cpu = 512  # 0.5 vCPU
             memory = 2048
             health_check = None  # disable for now
             # health_check = ecs.HealthCheck(
