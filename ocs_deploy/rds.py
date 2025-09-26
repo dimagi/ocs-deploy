@@ -16,7 +16,7 @@ class RdsStack(cdk.Stack):
             scope, config.stack_name(OCSConfig.RDS_STACK), env=config.cdk_env()
         )
 
-        self.db_instance = self.setup_rds_database(vpc, config)
+        self.setup_rds_database(vpc, config)
 
     def setup_rds_database(self, vpc, config: OCSConfig):
         db_server_sg = ec2.SecurityGroup(
@@ -29,6 +29,14 @@ class RdsStack(cdk.Stack):
         db_server_sg.add_ingress_rule(
             ec2.Peer.ipv4(vpc.vpc_cidr_block), ec2.Port.tcp(5432)
         )
+
+        proxy_sg = ec2.SecurityGroup(
+            self,
+            config.make_name("RdsProxySG"),
+            security_group_name=config.make_name("RdsProxySG"),
+            vpc=vpc,
+        )
+        proxy_sg.add_ingress_rule(ec2.Peer.ipv4(vpc.vpc_cidr_block), ec2.Port.tcp(5432))
 
         # Create a new IAM role that can be assumed by the RDS service
         rds_role = iam.Role(
@@ -53,7 +61,7 @@ class RdsStack(cdk.Stack):
         database_username = "ocs_db_user"
 
         # define postgresql database
-        db_instance = rds.DatabaseInstance(
+        self.db_instance = rds.DatabaseInstance(
             self,
             config.make_name("PostgresRDS"),
             engine=rds.DatabaseInstanceEngine.postgres(
@@ -92,15 +100,26 @@ class RdsStack(cdk.Stack):
                 "client_encoding": "UTF8",
             },
         )
-        db_instance.grant_connect(rds_role, database_username)
+        self.db_instance.grant_connect(rds_role, database_username)
 
-        port = db_instance.db_instance_endpoint_port
+        self.rds_proxy = rds.DatabaseProxy(
+            self,
+            config.make_name("PostgresRDSProxy"),
+            proxy_target=rds.ProxyTarget.from_instance(self.db_instance),
+            secrets=[self.db_instance.secret],
+            vpc=vpc,
+            security_groups=[proxy_sg],
+            idle_client_timeout=cdk.Duration.seconds(1800),
+            max_connections_percent=90,
+        )
+
+        port = self.db_instance.db_instance_endpoint_port
 
         cdk.CfnOutput(
             self,
             config.make_name("PostgresDatabaseInstanceAddress"),
             export_name=config.make_name("PostgresDatabaseInstanceAddress"),
-            value=db_instance.db_instance_endpoint_address,
+            value=self.db_instance.db_instance_endpoint_address,
             description="PostgreSQL database instance address.",
         )
 
@@ -112,4 +131,10 @@ class RdsStack(cdk.Stack):
             description="PostgreSQL database instance port.",
         )
 
-        return db_instance
+        cdk.CfnOutput(
+            self,
+            config.make_name("PostgresProxyInstanceAddress"),
+            export_name=config.make_name("PostgresProxyInstanceAddress"),
+            value=self.rds_proxy.endpoint,
+            description="PostgreSQL Proxy database instance address.",
+        )

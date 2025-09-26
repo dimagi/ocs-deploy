@@ -334,7 +334,7 @@ class FargateStack(cdk.Stack):
             "AWS_PUBLIC_STORAGE_BUCKET_NAME": self.config.s3_public_bucket_name,
             "AWS_S3_REGION": self.config.region,
             "DJANGO_DATABASE_NAME": self.config.rds_db_name,
-            "DJANGO_DATABASE_HOST": self.rds_stack.db_instance.instance_endpoint.hostname,
+            "DJANGO_DATABASE_HOST": self.rds_stack.rds_proxy.endpoint,
             "DJANGO_DATABASE_PORT": self.rds_stack.db_instance.db_instance_endpoint_port,
             "DJANGO_EMAIL_BACKEND": "anymail.backends.amazon_ses.EmailBackend",
             "DJANGO_SECURE_SSL_REDIRECT": "false",  # handled by the load balancer
