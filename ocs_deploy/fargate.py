@@ -192,7 +192,7 @@ class FargateStack(cdk.Stack):
             health_check=ecs.HealthCheck(
                 command=[
                     "CMD-SHELL",
-                    "curl -fISs http://localhost:8000/ -o /dev/null || exit 1",
+                    "curl -H 'Host: openchatstudio.com' -fISs http://localhost:8000/ -o /dev/null || exit 1",
                 ],
                 interval=cdk.Duration.seconds(30),
                 timeout=cdk.Duration.seconds(5),
