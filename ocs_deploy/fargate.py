@@ -179,7 +179,7 @@ class FargateStack(cdk.Stack):
             secrets=self.secrets_dict,
             logging=log_driver,
         )
-
+        first_allowed_host = config.allowed_hosts.split(',')[0].strip()
         webserver_container = django_task.add_container(
             id="web",
             image=image,
@@ -192,7 +192,7 @@ class FargateStack(cdk.Stack):
             health_check=ecs.HealthCheck(
                 command=[
                     "CMD-SHELL",
-                    "curl -fISs http://localhost:8000/ -o /dev/null || exit 1",
+                    f"curl -H 'Host: {first_allowed_host}' -fISs http://localhost:8000/ -o /dev/null || exit 1",
                 ],
                 interval=cdk.Duration.seconds(30),
                 timeout=cdk.Duration.seconds(5),
