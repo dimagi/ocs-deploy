@@ -73,7 +73,7 @@ class OCSConfig:
         self.sentry_environment = config.get("SENTRY_ENVIRONMENT", "development")
 
         self.github_repo = config.get("GITHUB_REPO", "dimagi/open-chat-studio")
-        self.allowed_hosts = config.get("DJANGO_ALLOWED_HOSTS", "")
+        self.allowed_hosts = config.get("DJANGO_ALLOWED_HOSTS")
 
     def stack_name(self, name: str):
         if name not in self.ALL_STACKS:
