@@ -349,6 +349,7 @@ class FargateStack(cdk.Stack):
             "TASKBADGER_ORG": self.config.taskbadger_org,
             "TASKBADGER_PROJECT": self.config.taskbadger_project,
             "SENTRY_ENVIRONMENT": self.config.sentry_environment,
+            "DJANGO_ALLOWED_HOSTS": self.config.allowed_hosts,
         }
 
     @cached_property
