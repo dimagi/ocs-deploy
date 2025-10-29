@@ -1,27 +1,100 @@
-﻿# ocs_deploy/stacks/waf.py
-from aws_cdk import Stack, RemovalPolicy, aws_wafv2 as wafv2, aws_logs as logs, aws_iam as iam, CfnOutput
+# ocs_deploy/stacks/waf.py
+from aws_cdk import (
+    Stack,
+    RemovalPolicy,
+    aws_wafv2 as wafv2,
+    aws_logs as logs,
+    aws_iam as iam,
+    CfnOutput,
+)
 from constructs import Construct
 from ocs_deploy.config import OCSConfig
+
+# URI patterns for endpoints that can send large POST bodies
+# These bypass only SizeRestrictions_BODY, all other protections remain active
+LARGE_BODY_ALLOWED_PATHS = [
+    ".*/pipelines/data/.*",  # Pipeline data uploads
+    "^/slack/events$",  # Slack webhook events
+]
+
+# URI patterns for endpoints that may not send User-Agent header
+# These bypass only NoUserAgent_HEADER, all other protections remain active
+NO_USER_AGENT_ALLOWED_PATHS = [
+    ".*/incoming_message$",  # Channel webhooks without User-Agent
+]
+
 
 class WAFStack(Stack):
     """
     Represents a CDK stack for deploying a WAF Web ACL associated with an Application Load Balancer.
-    Includes AWS Managed Rules and rate limiting in count mode, with logging to CloudWatch.
+
+    Protection Strategy:
+    1. IP blocklists (highest priority) - block malicious IPs
+    2. Scope-down allow rules - allow specific conditions to bypass ONLY specific checks:
+       - Large body (>8KB) for specific paths: bypass SizeRestrictions_BODY only when body is actually large
+       - Missing User-Agent for specific paths: bypass NoUserAgent_HEADER only when header is actually missing
+    3. AWS Managed Rules Common Rule Set - applies to all other traffic
+    4. Rate limiting (COUNT mode) - 2000 req/IP/5min
+
+    Security: Scope-down rules maintain maximum protection by only allowing exceptions when both conditions match:
+    - /pipelines/data/* with 1KB body: FULL protection (small body = not matched)
+    - /pipelines/data/* with 50KB body: SQL injection, XSS, LFI protection, large body allowed
+    - /incoming_message with User-Agent: FULL protection (header exists = not matched)
+    - /incoming_message without User-Agent: SQL injection, XSS, size protection, no User-Agent allowed
+    - /login: FULL protection always (not in pattern sets)
+
+    Logs all requests to CloudWatch for monitoring and analysis.
     """
 
     def __init__(
-        self,
-        scope: Construct,
-        config: OCSConfig,
-        load_balancer_arn: str,
-        **kwargs
+        self, scope: Construct, config: OCSConfig, load_balancer_arn: str, **kwargs
     ) -> None:
         super().__init__(
             scope, config.stack_name("waf"), env=config.cdk_env(), **kwargs
         )
         self.config = config
 
-        # Define the Web ACL
+        # Create IP sets for blocking malicious traffic
+        temp_block_ipset = wafv2.CfnIPSet(
+            self,
+            "TempBlockIPSet",
+            scope="REGIONAL",
+            name=config.make_name("TempBlockIPs"),
+            description="Temporary IP blocklist (managed via IaC)",
+            addresses=[],  # Empty by default, add IPs as needed
+            ip_address_version="IPV4",
+        )
+
+        permanent_block_ipset = wafv2.CfnIPSet(
+            self,
+            "PermanentBlockIPSet",
+            scope="REGIONAL",
+            name=config.make_name("PermanentBlockIPs"),
+            description="Permanent IP blocklist (managed via AWS Console)",
+            addresses=[],  # Empty by default, managed outside IaC
+            ip_address_version="IPV4",
+        )
+
+        # Create regex pattern sets for scope-down allow rules
+        large_body_paths_pattern_set = wafv2.CfnRegexPatternSet(
+            self,
+            "LargeBodyPathsPatternSet",
+            scope="REGIONAL",
+            name=config.make_name("LargeBodyPaths"),
+            description="Paths that can send large POST bodies (bypass SizeRestrictions_BODY only)",
+            regular_expression_list=LARGE_BODY_ALLOWED_PATHS,
+        )
+
+        no_user_agent_paths_pattern_set = wafv2.CfnRegexPatternSet(
+            self,
+            "NoUserAgentPathsPatternSet",
+            scope="REGIONAL",
+            name=config.make_name("NoUserAgentPaths"),
+            description="Paths that can omit User-Agent header (bypass NoUserAgent_HEADER only)",
+            regular_expression_list=NO_USER_AGENT_ALLOWED_PATHS,
+        )
+
+        # Define the Web ACL with rules
         self.web_acl = wafv2.CfnWebACL(
             self,
             "DjangoWebACL",
@@ -34,10 +107,144 @@ class WAFStack(Stack):
                 sampled_requests_enabled=True,
             ),
             rules=[
-                # Rule 1: AWS Managed Common Rule Set (Count mode)
+                # Rule 0: Block temporary IPs (highest priority)
+                wafv2.CfnWebACL.RuleProperty(
+                    name="BlockTempIPs",
+                    priority=0,
+                    statement=wafv2.CfnWebACL.StatementProperty(
+                        ip_set_reference_statement=wafv2.CfnWebACL.IPSetReferenceStatementProperty(
+                            arn=temp_block_ipset.attr_arn,
+                        )
+                    ),
+                    action=wafv2.CfnWebACL.RuleActionProperty(block={}),
+                    visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
+                        cloud_watch_metrics_enabled=True,
+                        metric_name=config.make_name("BlockTempIPsMetrics"),
+                        sampled_requests_enabled=True,
+                    ),
+                ),
+                # Rule 1: Block permanent IPs
+                wafv2.CfnWebACL.RuleProperty(
+                    name="BlockPermanentIPs",
+                    priority=1,
+                    statement=wafv2.CfnWebACL.StatementProperty(
+                        ip_set_reference_statement=wafv2.CfnWebACL.IPSetReferenceStatementProperty(
+                            arn=permanent_block_ipset.attr_arn,
+                        )
+                    ),
+                    action=wafv2.CfnWebACL.RuleActionProperty(block={}),
+                    visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
+                        cloud_watch_metrics_enabled=True,
+                        metric_name=config.make_name("BlockPermanentIPsMetrics"),
+                        sampled_requests_enabled=True,
+                    ),
+                ),
+                # Rule 2: Allow paths with missing User-Agent header (scope-down rule)
+                # Matches requests to specific paths that don't have User-Agent header
+                wafv2.CfnWebACL.RuleProperty(
+                    name="AllowNoUserAgentForSpecificPaths",
+                    priority=2,
+                    statement=wafv2.CfnWebACL.StatementProperty(
+                        and_statement=wafv2.CfnWebACL.AndStatementProperty(
+                            statements=[
+                                # Statement 1: URI matches the pattern set
+                                wafv2.CfnWebACL.StatementProperty(
+                                    regex_pattern_set_reference_statement=wafv2.CfnWebACL.RegexPatternSetReferenceStatementProperty(
+                                        arn=no_user_agent_paths_pattern_set.attr_arn,
+                                        field_to_match=wafv2.CfnWebACL.FieldToMatchProperty(
+                                            uri_path={}
+                                        ),
+                                        text_transformations=[
+                                            wafv2.CfnWebACL.TextTransformationProperty(
+                                                priority=0, type="NONE"
+                                            )
+                                        ],
+                                    )
+                                ),
+                                # Statement 2: User-Agent header is missing or empty
+                                wafv2.CfnWebACL.StatementProperty(
+                                    not_statement=wafv2.CfnWebACL.NotStatementProperty(
+                                        statement=wafv2.CfnWebACL.StatementProperty(
+                                            size_constraint_statement=wafv2.CfnWebACL.SizeConstraintStatementProperty(
+                                                field_to_match=wafv2.CfnWebACL.FieldToMatchProperty(
+                                                    single_header=wafv2.CfnWebACL.SingleHeaderProperty(
+                                                        name="user-agent"
+                                                    )
+                                                ),
+                                                comparison_operator="GT",
+                                                size=0,
+                                                text_transformations=[
+                                                    wafv2.CfnWebACL.TextTransformationProperty(
+                                                        priority=0, type="NONE"
+                                                    )
+                                                ],
+                                            )
+                                        )
+                                    )
+                                ),
+                            ]
+                        )
+                    ),
+                    action=wafv2.CfnWebACL.RuleActionProperty(allow={}),
+                    visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
+                        cloud_watch_metrics_enabled=True,
+                        metric_name=config.make_name("AllowNoUserAgentMetrics"),
+                        sampled_requests_enabled=True,
+                    ),
+                ),
+                # Rule 3: Allow large body for specific paths (scope-down rule)
+                # Matches requests to specific paths that have body size > 8KB
+                wafv2.CfnWebACL.RuleProperty(
+                    name="AllowLargeBodyForSpecificPaths",
+                    priority=3,
+                    statement=wafv2.CfnWebACL.StatementProperty(
+                        and_statement=wafv2.CfnWebACL.AndStatementProperty(
+                            statements=[
+                                # Statement 1: URI matches the pattern set
+                                wafv2.CfnWebACL.StatementProperty(
+                                    regex_pattern_set_reference_statement=wafv2.CfnWebACL.RegexPatternSetReferenceStatementProperty(
+                                        arn=large_body_paths_pattern_set.attr_arn,
+                                        field_to_match=wafv2.CfnWebACL.FieldToMatchProperty(
+                                            uri_path={}
+                                        ),
+                                        text_transformations=[
+                                            wafv2.CfnWebACL.TextTransformationProperty(
+                                                priority=0, type="NONE"
+                                            )
+                                        ],
+                                    )
+                                ),
+                                # Statement 2: Body size is greater than 8KB
+                                wafv2.CfnWebACL.StatementProperty(
+                                    size_constraint_statement=wafv2.CfnWebACL.SizeConstraintStatementProperty(
+                                        field_to_match=wafv2.CfnWebACL.FieldToMatchProperty(
+                                            body=wafv2.CfnWebACL.BodyProperty(
+                                                oversize_handling="CONTINUE"
+                                            )
+                                        ),
+                                        comparison_operator="GT",
+                                        size=8192,  # 8KB threshold
+                                        text_transformations=[
+                                            wafv2.CfnWebACL.TextTransformationProperty(
+                                                priority=0, type="NONE"
+                                            )
+                                        ],
+                                    )
+                                ),
+                            ]
+                        )
+                    ),
+                    action=wafv2.CfnWebACL.RuleActionProperty(allow={}),
+                    visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
+                        cloud_watch_metrics_enabled=True,
+                        metric_name=config.make_name("AllowLargeBodyPathsMetrics"),
+                        sampled_requests_enabled=True,
+                    ),
+                ),
+                # Rule 4: AWS Managed Common Rule Set (Count mode)
                 wafv2.CfnWebACL.RuleProperty(
                     name="AWSManagedCommonRuleSet",
-                    priority=0,
+                    priority=4,
                     statement=wafv2.CfnWebACL.StatementProperty(
                         managed_rule_group_statement=wafv2.CfnWebACL.ManagedRuleGroupStatementProperty(
                             vendor_name="AWS",
@@ -51,10 +258,10 @@ class WAFStack(Stack):
                         sampled_requests_enabled=True,
                     ),
                 ),
-                # Rule 2: Rate Limiting (Count mode)
+                # Rule 5: Rate Limiting (Count mode)
                 wafv2.CfnWebACL.RuleProperty(
                     name="RateLimitRule",
-                    priority=1,
+                    priority=5,
                     statement=wafv2.CfnWebACL.StatementProperty(
                         rate_based_statement=wafv2.CfnWebACL.RateBasedStatementProperty(
                             limit=2000,
@@ -122,4 +329,19 @@ class WAFStack(Stack):
             config.make_name("WAFLogGroupArn"),
             value=log_group.log_group_arn,
             description="ARN of the WAF Log Group",
+        )
+
+        # Output IP Set ARNs for easy reference
+        CfnOutput(
+            self,
+            config.make_name("TempBlockIPSetArn"),
+            value=temp_block_ipset.attr_arn,
+            description="ARN of the temporary IP blocklist",
+        )
+
+        CfnOutput(
+            self,
+            config.make_name("PermanentBlockIPSetArn"),
+            value=permanent_block_ipset.attr_arn,
+            description="ARN of the permanent IP blocklist",
         )
