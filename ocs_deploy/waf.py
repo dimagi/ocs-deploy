@@ -12,15 +12,24 @@ from ocs_deploy.config import OCSConfig
 
 # URI patterns for endpoints that can send large POST bodies
 # These bypass only SizeRestrictions_BODY, all other protections remain active
-LARGE_BODY_ALLOWED_PATHS = [
-    ".*/pipelines/data/.*",  # Pipeline data uploads
-    "^/slack/events$",  # Slack webhook events
+SizeRestrictions_BODY = [
+    r"^a/([-a-zA-Z0-9_]+)/assistants/new/$",
+    r"^a/([-a-zA-Z0-9_]+)/documents/collections/([0-9]+)/add_files$",
+    r"^a/([-a-zA-Z0-9_]+)/evaluations/dataset/new/$",
+    r"^a/([-a-zA-Z0-9_]+)/evaluations/evaluator/new/$",
+    r"^a/([-a-zA-Z0-9_]+)/evaluations/parse_csv_columns/$",
+    r"^a/([-a-zA-Z0-9_]+)/pipelines/data/([0-9]+)/$",
+    r"^slack/events$",
+    r"^users/profile/upload\-image/$",
 ]
 
 # URI patterns for endpoints that may not send User-Agent header
 # These bypass only NoUserAgent_HEADER, all other protections remain active
-NO_USER_AGENT_ALLOWED_PATHS = [
-    ".*/incoming_message$",  # Channel webhooks without User-Agent
+NoUserAgent_HEADER = [
+    r"^a/([-a-zA-Z0-9_]+)/chatbots/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/s/([^/]+)/chat/$",
+    r"^a/([-a-zA-Z0-9_]+)/chatbots/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/start/$",
+    r"^channels/sureadhere/([^/]+)/incoming_message$",
+    r"^channels/telegram/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
 ]
 
 
@@ -35,13 +44,6 @@ class WAFStack(Stack):
        - Missing User-Agent for specific paths: bypass NoUserAgent_HEADER only when header is actually missing
     3. AWS Managed Rules Common Rule Set - applies to all other traffic
     4. Rate limiting (COUNT mode) - 2000 req/IP/5min
-
-    Security: Scope-down rules maintain maximum protection by only allowing exceptions when both conditions match:
-    - /pipelines/data/* with 1KB body: FULL protection (small body = not matched)
-    - /pipelines/data/* with 50KB body: SQL injection, XSS, LFI protection, large body allowed
-    - /incoming_message with User-Agent: FULL protection (header exists = not matched)
-    - /incoming_message without User-Agent: SQL injection, XSS, size protection, no User-Agent allowed
-    - /login: FULL protection always (not in pattern sets)
 
     Logs all requests to CloudWatch for monitoring and analysis.
     """
@@ -82,7 +84,7 @@ class WAFStack(Stack):
             scope="REGIONAL",
             name=config.make_name("LargeBodyPaths"),
             description="Paths that can send large POST bodies (bypass SizeRestrictions_BODY only)",
-            regular_expression_list=LARGE_BODY_ALLOWED_PATHS,
+            regular_expression_list=SizeRestrictions_BODY,
         )
 
         no_user_agent_paths_pattern_set = wafv2.CfnRegexPatternSet(
@@ -91,7 +93,7 @@ class WAFStack(Stack):
             scope="REGIONAL",
             name=config.make_name("NoUserAgentPaths"),
             description="Paths that can omit User-Agent header (bypass NoUserAgent_HEADER only)",
-            regular_expression_list=NO_USER_AGENT_ALLOWED_PATHS,
+            regular_expression_list=NoUserAgent_HEADER,
         )
 
         # Define the Web ACL with rules
