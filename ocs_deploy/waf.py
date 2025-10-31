@@ -62,7 +62,7 @@ class WAFStack(Stack):
             "TempBlockIPSet",
             scope="REGIONAL",
             name=config.make_name("TempBlockIPs"),
-            description="Temporary IP blocklist (managed via IaC)",
+            description="Temporary IP blocklist - managed via IaC",
             addresses=[],  # Empty by default, add IPs as needed
             ip_address_version="IPV4",
         )
@@ -72,7 +72,7 @@ class WAFStack(Stack):
             "PermanentBlockIPSet",
             scope="REGIONAL",
             name=config.make_name("PermanentBlockIPs"),
-            description="Permanent IP blocklist (managed via AWS Console)",
+            description="Permanent IP blocklist - managed via AWS Console",
             addresses=[],  # Empty by default, managed outside IaC
             ip_address_version="IPV4",
         )
@@ -83,7 +83,7 @@ class WAFStack(Stack):
             "LargeBodyPathsPatternSet",
             scope="REGIONAL",
             name=config.make_name("LargeBodyPaths"),
-            description="Paths that can send large POST bodies (bypass SizeRestrictions_BODY only)",
+            description="Paths that can send large POST bodies - bypass SizeRestrictions_BODY only",
             regular_expression_list=SizeRestrictions_BODY,
         )
 
@@ -92,7 +92,7 @@ class WAFStack(Stack):
             "NoUserAgentPathsPatternSet",
             scope="REGIONAL",
             name=config.make_name("NoUserAgentPaths"),
-            description="Paths that can omit User-Agent header (bypass NoUserAgent_HEADER only)",
+            description="Paths that can omit User-Agent header - bypass NoUserAgent_HEADER only",
             regular_expression_list=NoUserAgent_HEADER,
         )
 
