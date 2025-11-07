@@ -143,7 +143,7 @@ class WAFStack(Stack):
                 f"LargeBodyPathsPatternSet{idx}",
                 scope="REGIONAL",
                 name=config.make_name(f"LargeBodyPaths{idx}"),
-                description=f"Paths that can send large POST bodies - bypass SizeRestrictions_BODY only (group {idx})",
+                description=f"Paths that can send large POST bodies - bypass SizeRestrictions_BODY only: group {idx}",
                 regular_expression_list=list(pattern_group),
             )
             large_body_pattern_sets.append(pattern_set)
@@ -156,7 +156,7 @@ class WAFStack(Stack):
                 f"NoUserAgentPathsPatternSet{idx}",
                 scope="REGIONAL",
                 name=config.make_name(f"NoUserAgentPaths{idx}"),
-                description=f"Paths that can omit User-Agent header - bypass NoUserAgent_HEADER only (group {idx})",
+                description=f"Paths that can omit User-Agent header - bypass NoUserAgent_HEADER only: group {idx}",
                 regular_expression_list=list(pattern_group),
             )
             no_user_agent_pattern_sets.append(pattern_set)
