@@ -1,6 +1,8 @@
+import itertools
 import re
 
 import pytest
+import rstr
 
 from ocs_deploy.waf_utils import (
     NoUserAgent_HEADER,
@@ -16,10 +18,8 @@ PATTERNS_TO_TEST = SizeRestrictions_BODY + NoUserAgent_HEADER
 def _generate_matching_example(pattern):
     """
     Taking a regex pattern and return a string that will match it
-
-    Current implementation very loose, possibly not even strictly correct.
     """
-    return (
+    naive_example = (
         pattern.replace(r"([-a-zA-Z0-9_]+)", "team-one_two3")
         .replace(
             r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
@@ -32,9 +32,15 @@ def _generate_matching_example(pattern):
         .replace(r"^", "")
         .replace(r"$", "")
     )
+    example = rstr.xeger(pattern)
+    return [naive_example, example]
 
 
-EXAMPLES = [_generate_matching_example(pattern) for pattern in PATTERNS_TO_TEST]
+EXAMPLES = list(
+    itertools.chain.from_iterable(
+        _generate_matching_example(pattern) for pattern in PATTERNS_TO_TEST
+    )
+)
 
 
 def test_compact_waf_regexes_simply__single_pattern():
