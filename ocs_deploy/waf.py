@@ -9,6 +9,9 @@ from aws_cdk import (
 )
 from constructs import Construct
 from ocs_deploy.config import OCSConfig
+from collections import defaultdict
+from itertools import islice
+from typing import List, Tuple
 
 # URI patterns for endpoints that can send large POST bodies
 # These bypass only SizeRestrictions_BODY, all other protections remain active
@@ -42,6 +45,108 @@ NoUserAgent_HEADER = [
 ]
 
 
+# Common affixes for regex compacting
+COMPACTIBLE_AFFIXES = (
+    (r"^/a/([-a-zA-Z0-9_]+)/", "$"),
+    (r"^/channels/", "$"),
+    (r"^/", "$"),
+)
+
+
+def compact_waf_regexes_simply(patterns: List[str], max_length: int = 200) -> List[str]:
+    """
+    Compact multiple patterns into combined regexes using OR (|) operator,
+    respecting max_length constraint.
+    """
+    compacted_regexes = []
+    regex_buffer = ""
+    for pattern in patterns:
+        if len(regex_buffer) + len(pattern) + 1 <= max_length:
+            if regex_buffer:
+                regex_buffer += "|" + pattern
+            else:
+                regex_buffer = pattern
+        else:
+            compacted_regexes.append(regex_buffer)
+            regex_buffer = pattern
+    if regex_buffer:
+        compacted_regexes.append(regex_buffer)
+    return compacted_regexes
+
+
+def compact_waf_regexes(
+    patterns: List[str],
+    compactible_affixes: Tuple[Tuple[str, str], ...] = COMPACTIBLE_AFFIXES,
+    max_length: int = 200,
+) -> List[str]:
+    """
+    Compact regexes into as few as possible regexes each of which is no longer
+    than `max_length` characters. Groups patterns by common prefixes/suffixes.
+    """
+    patterns_grouped_by_affix = defaultdict(list)
+    non_matching_patterns = []
+
+    # Group patterns by matching prefix/suffix pairs
+    for pattern in patterns:
+        for prefix, suffix in compactible_affixes:
+            if (
+                pattern.startswith(prefix)
+                and pattern.endswith(suffix)
+                and len(pattern) >= len(prefix + suffix)
+            ):
+                patterns_grouped_by_affix[(prefix, suffix)].append(
+                    pattern[len(prefix) : -len(suffix) if suffix != "$" else None]
+                )
+                break
+        else:
+            non_matching_patterns.append(pattern)
+
+    # Create intermediate compacted regexes
+    intermediate_compacted_regexes = [
+        f"{prefix}({regex}){suffix}"
+        for (prefix, suffix), grouped_patterns in patterns_grouped_by_affix.items()
+        for regex in compact_waf_regexes_simply(
+            grouped_patterns, max_length=max_length - len(prefix + suffix) - 2
+        )
+    ] + compact_waf_regexes_simply(non_matching_patterns, max_length=max_length)
+
+    # Sort and further compact
+    intermediate_compacted_regexes.sort(key=lambda r: len(r))
+    final_compacted_regexes = []
+
+    while intermediate_compacted_regexes:
+        shortest = intermediate_compacted_regexes[0]
+        longest = intermediate_compacted_regexes[-1]
+        if (
+            len(shortest) + len(longest) + 1 > max_length
+            or len(intermediate_compacted_regexes) == 1
+        ):
+            final_compacted_regexes.append(intermediate_compacted_regexes.pop())
+        else:
+            intermediate_compacted_regexes.pop(0)
+            intermediate_compacted_regexes[-1] = f"{shortest}|{longest}"
+
+    return final_compacted_regexes
+
+
+def create_waf_regex_groupings(
+    patterns: List[str],
+    compactible_affixes: Tuple[Tuple[str, str], ...] = COMPACTIBLE_AFFIXES,
+    max_length: int = 200,
+    max_group_size: int = 10,
+) -> List[Tuple[str, ...]]:
+    """
+    Create WAF regex pattern groups that respect both max_length and max_group_size constraints.
+    Returns list of tuples, each containing up to max_group_size patterns.
+    """
+    regexes = compact_waf_regexes(patterns, compactible_affixes, max_length)
+    groups = []
+    iterator = iter(regexes)
+    while batch := tuple(islice(iterator, max_group_size)):
+        groups.append(batch)
+    return groups
+
+
 class WAFStack(Stack):
     """
     Represents a CDK stack for deploying a WAF Web ACL associated with an Application Load Balancer.
@@ -56,6 +161,74 @@ class WAFStack(Stack):
 
     Logs all requests to CloudWatch for monitoring and analysis.
     """
+
+    def _create_regex_match_statement(
+        self, pattern_set_arn: str
+    ) -> wafv2.CfnWebACL.StatementProperty:
+        """Helper to create a regex pattern set match statement for URI path."""
+        return wafv2.CfnWebACL.StatementProperty(
+            regex_pattern_set_reference_statement=wafv2.CfnWebACL.RegexPatternSetReferenceStatementProperty(
+                arn=pattern_set_arn,
+                field_to_match=wafv2.CfnWebACL.FieldToMatchProperty(uri_path={}),
+                text_transformations=[
+                    wafv2.CfnWebACL.TextTransformationProperty(priority=0, type="NONE")
+                ],
+            )
+        )
+
+    def _create_uri_matches_any_pattern_set_statement(
+        self, pattern_sets: List[wafv2.CfnRegexPatternSet]
+    ) -> wafv2.CfnWebACL.StatementProperty:
+        """Create an OR statement that matches if URI matches any of the pattern sets."""
+        if len(pattern_sets) == 1:
+            return self._create_regex_match_statement(pattern_sets[0].attr_arn)
+        else:
+            return wafv2.CfnWebACL.StatementProperty(
+                or_statement=wafv2.CfnWebACL.OrStatementProperty(
+                    statements=[
+                        self._create_regex_match_statement(ps.attr_arn)
+                        for ps in pattern_sets
+                    ]
+                )
+            )
+
+    def _create_missing_user_agent_statement(self) -> wafv2.CfnWebACL.StatementProperty:
+        """Create statement that checks if User-Agent header is missing or empty."""
+        return wafv2.CfnWebACL.StatementProperty(
+            not_statement=wafv2.CfnWebACL.NotStatementProperty(
+                statement=wafv2.CfnWebACL.StatementProperty(
+                    size_constraint_statement=wafv2.CfnWebACL.SizeConstraintStatementProperty(
+                        field_to_match=wafv2.CfnWebACL.FieldToMatchProperty(
+                            single_header=wafv2.CfnWebACL.SingleHeaderProperty(
+                                name="user-agent"
+                            )
+                        ),
+                        comparison_operator="GT",
+                        size=0,
+                        text_transformations=[
+                            wafv2.CfnWebACL.TextTransformationProperty(
+                                priority=0, type="NONE"
+                            )
+                        ],
+                    )
+                )
+            )
+        )
+
+    def _create_large_body_statement(self) -> wafv2.CfnWebACL.StatementProperty:
+        """Create statement that checks if body size is > 8KB."""
+        return wafv2.CfnWebACL.StatementProperty(
+            size_constraint_statement=wafv2.CfnWebACL.SizeConstraintStatementProperty(
+                field_to_match=wafv2.CfnWebACL.FieldToMatchProperty(
+                    body=wafv2.CfnWebACL.BodyProperty(oversize_handling="CONTINUE")
+                ),
+                comparison_operator="GT",
+                size=8192,  # 8KB threshold
+                text_transformations=[
+                    wafv2.CfnWebACL.TextTransformationProperty(priority=0, type="NONE")
+                ],
+            )
+        )
 
     def __init__(
         self, scope: Construct, config: OCSConfig, load_balancer_arn: str, **kwargs
@@ -87,23 +260,35 @@ class WAFStack(Stack):
         )
 
         # Create regex pattern sets for scope-down allow rules
-        large_body_paths_pattern_set = wafv2.CfnRegexPatternSet(
-            self,
-            "LargeBodyPathsPatternSet",
-            scope="REGIONAL",
-            name=config.make_name("LargeBodyPaths"),
-            description="Paths that can send large POST bodies - bypass SizeRestrictions_BODY only",
-            regular_expression_list=SizeRestrictions_BODY,
-        )
+        # Use compacting to reduce pattern count and split into groups if needed
+        large_body_groups = create_waf_regex_groupings(SizeRestrictions_BODY)
+        no_user_agent_groups = create_waf_regex_groupings(NoUserAgent_HEADER)
 
-        no_user_agent_paths_pattern_set = wafv2.CfnRegexPatternSet(
-            self,
-            "NoUserAgentPathsPatternSet",
-            scope="REGIONAL",
-            name=config.make_name("NoUserAgentPaths"),
-            description="Paths that can omit User-Agent header - bypass NoUserAgent_HEADER only",
-            regular_expression_list=NoUserAgent_HEADER,
-        )
+        # Create pattern sets for large body paths (may be multiple sets)
+        large_body_pattern_sets = []
+        for idx, pattern_group in enumerate(large_body_groups):
+            pattern_set = wafv2.CfnRegexPatternSet(
+                self,
+                f"LargeBodyPathsPatternSet{idx}",
+                scope="REGIONAL",
+                name=config.make_name(f"LargeBodyPaths{idx}"),
+                description=f"Paths that can send large POST bodies - bypass SizeRestrictions_BODY only (group {idx})",
+                regular_expression_list=list(pattern_group),
+            )
+            large_body_pattern_sets.append(pattern_set)
+
+        # Create pattern sets for no user agent paths (may be multiple sets)
+        no_user_agent_pattern_sets = []
+        for idx, pattern_group in enumerate(no_user_agent_groups):
+            pattern_set = wafv2.CfnRegexPatternSet(
+                self,
+                f"NoUserAgentPathsPatternSet{idx}",
+                scope="REGIONAL",
+                name=config.make_name(f"NoUserAgentPaths{idx}"),
+                description=f"Paths that can omit User-Agent header - bypass NoUserAgent_HEADER only (group {idx})",
+                regular_expression_list=list(pattern_group),
+            )
+            no_user_agent_pattern_sets.append(pattern_set)
 
         # Define the Web ACL with rules
         self.web_acl = wafv2.CfnWebACL(
@@ -158,41 +343,12 @@ class WAFStack(Stack):
                     statement=wafv2.CfnWebACL.StatementProperty(
                         and_statement=wafv2.CfnWebACL.AndStatementProperty(
                             statements=[
-                                # Statement 1: URI matches the pattern set
-                                wafv2.CfnWebACL.StatementProperty(
-                                    regex_pattern_set_reference_statement=wafv2.CfnWebACL.RegexPatternSetReferenceStatementProperty(
-                                        arn=no_user_agent_paths_pattern_set.attr_arn,
-                                        field_to_match=wafv2.CfnWebACL.FieldToMatchProperty(
-                                            uri_path={}
-                                        ),
-                                        text_transformations=[
-                                            wafv2.CfnWebACL.TextTransformationProperty(
-                                                priority=0, type="NONE"
-                                            )
-                                        ],
-                                    )
+                                # Statement 1: URI matches any of the no user agent pattern sets
+                                self._create_uri_matches_any_pattern_set_statement(
+                                    no_user_agent_pattern_sets
                                 ),
                                 # Statement 2: User-Agent header is missing or empty
-                                wafv2.CfnWebACL.StatementProperty(
-                                    not_statement=wafv2.CfnWebACL.NotStatementProperty(
-                                        statement=wafv2.CfnWebACL.StatementProperty(
-                                            size_constraint_statement=wafv2.CfnWebACL.SizeConstraintStatementProperty(
-                                                field_to_match=wafv2.CfnWebACL.FieldToMatchProperty(
-                                                    single_header=wafv2.CfnWebACL.SingleHeaderProperty(
-                                                        name="user-agent"
-                                                    )
-                                                ),
-                                                comparison_operator="GT",
-                                                size=0,
-                                                text_transformations=[
-                                                    wafv2.CfnWebACL.TextTransformationProperty(
-                                                        priority=0, type="NONE"
-                                                    )
-                                                ],
-                                            )
-                                        )
-                                    )
-                                ),
+                                self._create_missing_user_agent_statement(),
                             ]
                         )
                     ),
@@ -211,37 +367,12 @@ class WAFStack(Stack):
                     statement=wafv2.CfnWebACL.StatementProperty(
                         and_statement=wafv2.CfnWebACL.AndStatementProperty(
                             statements=[
-                                # Statement 1: URI matches the pattern set
-                                wafv2.CfnWebACL.StatementProperty(
-                                    regex_pattern_set_reference_statement=wafv2.CfnWebACL.RegexPatternSetReferenceStatementProperty(
-                                        arn=large_body_paths_pattern_set.attr_arn,
-                                        field_to_match=wafv2.CfnWebACL.FieldToMatchProperty(
-                                            uri_path={}
-                                        ),
-                                        text_transformations=[
-                                            wafv2.CfnWebACL.TextTransformationProperty(
-                                                priority=0, type="NONE"
-                                            )
-                                        ],
-                                    )
+                                # Statement 1: URI matches any of the large body pattern sets
+                                self._create_uri_matches_any_pattern_set_statement(
+                                    large_body_pattern_sets
                                 ),
                                 # Statement 2: Body size is greater than 8KB
-                                wafv2.CfnWebACL.StatementProperty(
-                                    size_constraint_statement=wafv2.CfnWebACL.SizeConstraintStatementProperty(
-                                        field_to_match=wafv2.CfnWebACL.FieldToMatchProperty(
-                                            body=wafv2.CfnWebACL.BodyProperty(
-                                                oversize_handling="CONTINUE"
-                                            )
-                                        ),
-                                        comparison_operator="GT",
-                                        size=8192,  # 8KB threshold
-                                        text_transformations=[
-                                            wafv2.CfnWebACL.TextTransformationProperty(
-                                                priority=0, type="NONE"
-                                            )
-                                        ],
-                                    )
-                                ),
+                                self._create_large_body_statement(),
                             ]
                         )
                     ),
