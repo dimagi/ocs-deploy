@@ -43,6 +43,8 @@ def connect(c: Context, command="bash -l", service="django", profile=DEFAULT_PRO
         "stacks": STACKS_HELP,
         "verbose": "Enable verbose output",
         "skip_approval": "Do not prompt for approval before deploying",
+        "with_dependencies": "Include dependent stacks. This is usually only needed when setting up the "
+        "resources the first time.",
     }
     | PROFILE_HELP,
     auto_shortflags=False,
@@ -53,6 +55,7 @@ def deploy(
     verbose=False,
     profile=DEFAULT_PROFILE,
     skip_approval=False,
+    with_dependencies=False,
 ):
     """Deploy the specified stacks. If no stacks are specified, all stacks will be deployed."""
     profile = get_profile_and_auth(c, profile)
@@ -61,7 +64,9 @@ def deploy(
     cmd = "cdk deploy"
     if stacks:
         stacks = " ".join([config.stack_name(stack) for stack in stacks.split(",")])
-        cmd += f" {stacks} --exclusively"
+        cmd += f" {stacks}"
+        if not with_dependencies:
+            cmd += " --exclusively"
     else:
         confirm("Deploy all stacks ?", _exit=True, exit_message="Aborted")
         cmd += " --all"

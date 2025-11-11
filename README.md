@@ -104,7 +104,7 @@ Edit the generated `.env.{env name}` file to set your required configurations.
       && export OCS_NAME=<name e.g. chatbots> \
       && export REGISTRY=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com \
       && export IMAGE=$REGISTRY/$OCS_NAME-$OCS_ENV-ecr-repo
-    docker build . -t "$IMAGE:latest" -f Dockerfile
+    docker build . -t "$IMAGE:latest" -f Dockerfile --build-arg SECRET_KEY=123 --build-arg=DJANGO_ALLOWED_HOSTS="dummy"
     aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REGISTRY
     docker push "$IMAGE" --all-tags
     ```
