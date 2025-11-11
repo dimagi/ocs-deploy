@@ -43,6 +43,8 @@ class OCSConfig:
     LOG_GROUP_CELERY = "CeleryWorkerLogs"
     LOG_GROUP_BEAT = "CeleryBeatLogs"
 
+    CONTAINER_PORT = 8000
+
     def __init__(self, env: str):
         if not env:
             raise Exception("No environment specified")
@@ -160,6 +162,36 @@ class OCSConfig:
     @property
     def s3_whatsapp_audio_bucket(self):
         return self.make_name("s3-whatsapp-audio")
+
+    def get_django_env(self, rds_host, rds_port):
+        env_dict = {
+            "ACCOUNT_EMAIL_VERIFICATION": "mandatory",
+            "AWS_PRIVATE_STORAGE_BUCKET_NAME": self.s3_private_bucket_name,
+            "AWS_PUBLIC_STORAGE_BUCKET_NAME": self.s3_public_bucket_name,
+            "AWS_S3_REGION": self.region,
+            "DJANGO_DATABASE_NAME": self.rds_db_name,
+            "DJANGO_DATABASE_HOST": rds_host,
+            "DJANGO_DATABASE_PORT": rds_port,
+            "DJANGO_EMAIL_BACKEND": "anymail.backends.amazon_ses.EmailBackend",
+            "DJANGO_SECURE_SSL_REDIRECT": "false",  # handled by the load balancer
+            "DJANGO_SETTINGS_MODULE": "gpt_playground.settings_production",
+            "PORT": str(self.CONTAINER_PORT),
+            "PRIVACY_POLICY_URL": self.privacy_policy_url,
+            "TERMS_URL": self.terms_url,
+            "SIGNUP_ENABLED": self.signup_enabled,
+            "SLACK_BOT_NAME": self.slack_bot_name,
+            "USE_S3_STORAGE": "True",
+            "WHATSAPP_S3_AUDIO_BUCKET": self.s3_whatsapp_audio_bucket,
+            "TASKBADGER_ORG": self.taskbadger_org,
+            "TASKBADGER_PROJECT": self.taskbadger_project,
+            "SENTRY_ENVIRONMENT": self.sentry_environment,
+            "DJANGO_ALLOWED_HOSTS": self.allowed_hosts,
+        }
+        if self.django_server_email:
+            env_dict["DJANGO_SERVER_EMAIL"] = self.django_server_email
+        if self.django_default_from_email:
+            env_dict["DJANGO_DEFAULT_FROM_EMAIL"] = self.django_default_from_email
+        return env_dict
 
     def normalize_secret_name(self, name):
         prefix = self.make_secret_name("")

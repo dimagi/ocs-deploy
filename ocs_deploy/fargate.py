@@ -14,8 +14,6 @@ from constructs import Construct
 
 from ocs_deploy.config import OCSConfig
 
-CONTAINER_PORT = 8000
-
 
 class FargateStack(cdk.Stack):
     """
@@ -175,7 +173,7 @@ class FargateStack(cdk.Stack):
             command=["python", "manage.py", "migrate"],
             health_check=None,
             essential=False,
-            environment=self.env_dict,
+            environment=self.django_env,
             secrets=self.secrets_dict,
             logging=log_driver,
         )
@@ -185,8 +183,8 @@ class FargateStack(cdk.Stack):
             image=image,
             container_name="web",
             essential=True,
-            port_mappings=[ecs.PortMapping(container_port=CONTAINER_PORT)],
-            environment=self.env_dict,
+            port_mappings=[ecs.PortMapping(container_port=self.config.CONTAINER_PORT)],
+            environment=self.django_env,
             secrets=self.secrets_dict,
             logging=log_driver,
             health_check=ecs.HealthCheck(
@@ -280,7 +278,7 @@ class FargateStack(cdk.Stack):
             image=image,
             container_name=container_name,
             essential=True,
-            environment=self.env_dict,
+            environment=self.django_env,
             secrets=self.secrets_dict,
             logging=log_driver,
             command=command,
@@ -325,37 +323,11 @@ class FargateStack(cdk.Stack):
         return secrets
 
     @cached_property
-    def env_dict(self):
-        env_dict = {
-            "ACCOUNT_EMAIL_VERIFICATION": "mandatory",
-            "AWS_PRIVATE_STORAGE_BUCKET_NAME": self.config.s3_private_bucket_name,
-            "AWS_PUBLIC_STORAGE_BUCKET_NAME": self.config.s3_public_bucket_name,
-            "AWS_S3_REGION": self.config.region,
-            "DJANGO_DATABASE_NAME": self.config.rds_db_name,
-            "DJANGO_DATABASE_HOST": self.rds_stack.rds_proxy.endpoint,
-            "DJANGO_DATABASE_PORT": self.rds_stack.db_instance.db_instance_endpoint_port,
-            "DJANGO_EMAIL_BACKEND": "anymail.backends.amazon_ses.EmailBackend",
-            "DJANGO_SECURE_SSL_REDIRECT": "false",  # handled by the load balancer
-            "DJANGO_SETTINGS_MODULE": "gpt_playground.settings_production",
-            "PORT": str(CONTAINER_PORT),
-            "PRIVACY_POLICY_URL": self.config.privacy_policy_url,
-            "TERMS_URL": self.config.terms_url,
-            "SIGNUP_ENABLED": self.config.signup_enabled,
-            "SLACK_BOT_NAME": self.config.slack_bot_name,
-            "USE_S3_STORAGE": "True",
-            "WHATSAPP_S3_AUDIO_BUCKET": self.config.s3_whatsapp_audio_bucket,
-            "TASKBADGER_ORG": self.config.taskbadger_org,
-            "TASKBADGER_PROJECT": self.config.taskbadger_project,
-            "SENTRY_ENVIRONMENT": self.config.sentry_environment,
-            "DJANGO_ALLOWED_HOSTS": self.config.allowed_hosts,
-        }
-        if self.config.django_server_email:
-            env_dict["DJANGO_SERVER_EMAIL"] = self.config.django_server_email
-        if self.config.django_default_from_email:
-            env_dict[
-                "DJANGO_DEFAULT_FROM_EMAIL"
-            ] = self.config.django_default_from_email
-        return env_dict
+    def django_env(self):
+        return self.config.get_django_env(
+            rds_host=self.rds_stack.rds_proxy.endpoint,
+            rds_port=self.rds_stack.db_instance.db_instance_endpoint_port,
+        )
 
     @cached_property
     def execution_role(self):
