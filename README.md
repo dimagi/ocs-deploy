@@ -210,5 +210,10 @@ If this step fails ensure that all secrets are set. To re-run this step you will
 1. **AWS Credentials Not Set**: Ensure that your AWS credentials are correctly configured and that AWS_PROFILE is set.
 2. **Docker Login Issues**: If you encounter issues with Docker login, ensure that you are using the correct AWS region and account ID.
 3. **Secrets Not Found** : If a secret is not found, ensure that it is correctly defined in the secrets.yml file and that it has been created in AWS Secrets Manager.
-4. 
+4. **Log group exists**: Log groups are set to RETAIN to prevent accidental deletion but this means that if a stack is rolled back, rolling it out again will fail because the log groups now exist. To fix this, you must manually remove the log groups.
+
+    ```
+    aws logs delete-log-group --log-group-name <log group name> --profile <aws profile>
+    ```
+
 For more detailed troubleshooting, refer to the [AWS CDK documentation](https://docs.aws.amazon.com/cdk/latest/guide/troubleshooting.html).
