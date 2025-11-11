@@ -53,32 +53,21 @@ class OCSConfig:
         if not env_path.exists():
             raise Exception(f"Environment file not found: {env_path}")
 
-        config = dotenv_values(env_path)
+        self._config = dotenv_values(env_path)
         self.environment = env
-        self.account = config["CDK_ACCOUNT"]
-        self.region = config["CDK_REGION"]
+        self.account = self._config["CDK_ACCOUNT"]
+        self.region = self._config["CDK_REGION"]
 
-        self.email_domain = config["EMAIL_DOMAIN"]
-        self.domain_name = config["DOMAIN_NAME"]
+        self.email_domain = self._config["EMAIL_DOMAIN"]
+        self.domain_name = self._config["DOMAIN_NAME"]
 
-        self.app_name = config.get("APP_NAME", "ocs")
-        self.maintenance_window = config.get(
+        self.app_name = self._config.get("APP_NAME", "ocs")
+        self.maintenance_window = self._config.get(
             "MAINTENANCE_WINDOW", "Mon:00:00-Mon:03:00"
         )
 
-        self.privacy_policy_url = config.get("PRIVACY_POLICY_URL", "")
-        self.terms_url = config.get("TERMS_URL", "")
-        self.signup_enabled = config.get("SIGNUP_ENABLED", "False")
-        self.slack_bot_name = config.get("SLACK_BOT_NAME", "OCS Bot")
-
-        self.taskbadger_org = config.get("TASKBADGER_ORG", "")
-        self.taskbadger_project = config.get("TASKBADGER_PROJECT", "")
-        self.sentry_environment = config.get("SENTRY_ENVIRONMENT", "development")
-
-        self.github_repo = config.get("GITHUB_REPO", "dimagi/open-chat-studio")
-        self.allowed_hosts = config["DJANGO_ALLOWED_HOSTS"]
-        self.django_server_email = config.get("DJANGO_SERVER_EMAIL", "")
-        self.django_default_from_email = config.get("DJANGO_DEFAULT_FROM_EMAIL", "")
+        self.github_repo = self._config.get("GITHUB_REPO", "dimagi/open-chat-studio")
+        self.allowed_hosts = self._config["DJANGO_ALLOWED_HOSTS"]
 
     def stack_name(self, name: str):
         if name not in self.ALL_STACKS:
@@ -150,7 +139,6 @@ class OCSConfig:
     def django_secret_key_secrets_name(self):
         return self.make_secret_name("django-secret-key")
 
-    # TODO: create buckets
     @property
     def s3_private_bucket_name(self):
         return self.make_name("s3-private")
@@ -176,21 +164,24 @@ class OCSConfig:
             "DJANGO_SECURE_SSL_REDIRECT": "false",  # handled by the load balancer
             "DJANGO_SETTINGS_MODULE": "gpt_playground.settings_production",
             "PORT": str(self.CONTAINER_PORT),
-            "PRIVACY_POLICY_URL": self.privacy_policy_url,
-            "TERMS_URL": self.terms_url,
-            "SIGNUP_ENABLED": self.signup_enabled,
-            "SLACK_BOT_NAME": self.slack_bot_name,
             "USE_S3_STORAGE": "True",
             "WHATSAPP_S3_AUDIO_BUCKET": self.s3_whatsapp_audio_bucket,
-            "TASKBADGER_ORG": self.taskbadger_org,
-            "TASKBADGER_PROJECT": self.taskbadger_project,
-            "SENTRY_ENVIRONMENT": self.sentry_environment,
+            "SENTRY_ENVIRONMENT": self._config.get("SENTRY_ENVIRONMENT", "development"),
             "DJANGO_ALLOWED_HOSTS": self.allowed_hosts,
         }
-        if self.django_server_email:
-            env_dict["DJANGO_SERVER_EMAIL"] = self.django_server_email
-        if self.django_default_from_email:
-            env_dict["DJANGO_DEFAULT_FROM_EMAIL"] = self.django_default_from_email
+        optional = [
+            "PRIVACY_POLICY_URL",
+            "TERMS_URL",
+            "SIGNUP_ENABLED",
+            "SLACK_BOT_NAME",
+            "TASKBADGER_ORG",
+            "TASKBADGER_PROJECT",
+            "DJANGO_SERVER_EMAIL",
+            "DJANGO_DEFAULT_FROM_EMAIL",
+        ]
+        for key in optional:
+            if value := self._config.get(key):
+                env_dict[key] = value
         return env_dict
 
     def normalize_secret_name(self, name):
