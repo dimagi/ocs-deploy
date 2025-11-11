@@ -75,6 +75,8 @@ class OCSConfig:
 
         self.github_repo = config.get("GITHUB_REPO", "dimagi/open-chat-studio")
         self.allowed_hosts = config["DJANGO_ALLOWED_HOSTS"]
+        self.django_server_email = config.get("DJANGO_SERVER_EMAIL", "")
+        self.django_default_from_email = config.get("DJANGO_DEFAULT_FROM_EMAIL", "")
 
     def stack_name(self, name: str):
         if name not in self.ALL_STACKS:

@@ -326,7 +326,7 @@ class FargateStack(cdk.Stack):
 
     @cached_property
     def env_dict(self):
-        return {
+        env_dict = {
             "ACCOUNT_EMAIL_VERIFICATION": "mandatory",
             "AWS_PRIVATE_STORAGE_BUCKET_NAME": self.config.s3_private_bucket_name,
             "AWS_PUBLIC_STORAGE_BUCKET_NAME": self.config.s3_public_bucket_name,
@@ -349,6 +349,13 @@ class FargateStack(cdk.Stack):
             "SENTRY_ENVIRONMENT": self.config.sentry_environment,
             "DJANGO_ALLOWED_HOSTS": self.config.allowed_hosts,
         }
+        if self.config.django_server_email:
+            env_dict["DJANGO_SERVER_EMAIL"] = self.config.django_server_email
+        if self.config.django_default_from_email:
+            env_dict[
+                "DJANGO_DEFAULT_FROM_EMAIL"
+            ] = self.config.django_default_from_email
+        return env_dict
 
     @cached_property
     def execution_role(self):
