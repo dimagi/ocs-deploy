@@ -3,6 +3,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+import boto3
 import yaml
 from dotenv import dotenv_values
 
@@ -179,9 +180,44 @@ class OCSConfig:
             Secret(
                 name=self.make_secret_name(raw["name"]),
                 managed=raw.get("managed", False),
+                optional=raw.get("optional", False),
             )
             for raw in data["secrets"]
         ]
+
+    def _secret_exists(self, secret_name: str) -> bool:
+        """Check if a secret exists in AWS Secrets Manager."""
+        try:
+            client = boto3.client("secretsmanager", region_name=self.region)
+            client.describe_secret(SecretId=secret_name)
+            return True
+        except client.exceptions.ResourceNotFoundException:
+            return False
+        except Exception as e:
+            # For other errors (permissions, etc), log and return False
+            print(f"Warning: Could not check secret {secret_name}: {e}")
+            return True  # assume it exists, this will fail cause the deploy to fail if it doesn't exist
+
+    def get_existing_secrets_list(self):
+        """Return only secrets that exist in AWS Secrets Manager.
+
+        Skips managed secrets and optional secrets that don't exist.
+        """
+        secrets = []
+        for secret in self.get_secrets_list():
+            if secret.managed:
+                continue
+
+            # For optional secrets, only include if they exist in AWS Secrets Manager
+            if secret.optional:
+                if not self._secret_exists(secret.name):
+                    print(
+                        f"Skipping optional secret {secret.name} (not found in Secrets Manager)"
+                    )
+                    continue
+
+            secrets.append(secret)
+        return secrets
 
 
 @dataclasses.dataclass
@@ -193,6 +229,7 @@ class Secret:
     last_changed: datetime | None = None
     value: str = ""
     managed: bool = False
+    optional: bool = False
 
     @classmethod
     def from_dict(cls, data):

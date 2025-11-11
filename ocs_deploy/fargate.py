@@ -179,7 +179,7 @@ class FargateStack(cdk.Stack):
             secrets=self.secrets_dict,
             logging=log_driver,
         )
-        first_allowed_host = config.allowed_hosts.split(',')[0].strip()
+        first_allowed_host = config.allowed_hosts.split(",")[0].strip()
         webserver_container = django_task.add_container(
             id="web",
             image=image,
@@ -316,9 +316,7 @@ class FargateStack(cdk.Stack):
             # "AWS_SES_REGION":
             # "AWS_SES_SECRET_KEY":
         }
-        for secret in self.config.get_secrets_list():
-            if secret.managed:
-                continue
+        for secret in self.config.get_existing_secrets_list():
             secrets[secret.env_var] = ecs.Secret.from_secrets_manager(
                 secretsmanager.Secret.from_secret_name_v2(
                     self, secret.name, secret.name
