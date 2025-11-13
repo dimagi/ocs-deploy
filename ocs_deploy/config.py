@@ -156,7 +156,7 @@ class OCSConfig:
             rds_host,
             rds_port,
             DJANGO_DATABASE_USE_POOL="false",
-            DJANGO_DATABASE_CONN_MAX_AGE="300",
+            DJANGO_DATABASE_CONN_MAX_AGE="0",
         )
 
     def get_django_env(self, rds_host, rds_port):
