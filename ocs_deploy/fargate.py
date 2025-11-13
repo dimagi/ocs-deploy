@@ -278,7 +278,7 @@ class FargateStack(cdk.Stack):
             image=image,
             container_name=container_name,
             essential=True,
-            environment=self.django_env,
+            environment=self.celery_env,
             secrets=self.secrets_dict,
             logging=log_driver,
             command=command,
@@ -325,6 +325,13 @@ class FargateStack(cdk.Stack):
     @cached_property
     def django_env(self):
         return self.config.get_django_env(
+            rds_host=self.rds_stack.rds_proxy.endpoint,
+            rds_port=self.rds_stack.db_instance.db_instance_endpoint_port,
+        )
+
+    @cached_property
+    def celery_env(self):
+        return self.config.get_celery_env(
             rds_host=self.rds_stack.rds_proxy.endpoint,
             rds_port=self.rds_stack.db_instance.db_instance_endpoint_port,
         )
