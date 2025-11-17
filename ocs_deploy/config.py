@@ -151,7 +151,18 @@ class OCSConfig:
     def s3_whatsapp_audio_bucket(self):
         return self.make_name("s3-whatsapp-audio")
 
+    def get_celery_env(self, rds_host, rds_port):
+        return self._get_common_env(
+            rds_host,
+            rds_port,
+            DJANGO_DATABASE_USE_POOL="false",
+            DJANGO_DATABASE_CONN_MAX_AGE="0",
+        )
+
     def get_django_env(self, rds_host, rds_port):
+        return self._get_common_env(rds_host, rds_port)
+
+    def _get_common_env(self, rds_host, rds_port, **extra):
         env_dict = {
             "ACCOUNT_EMAIL_VERIFICATION": "mandatory",
             "AWS_PRIVATE_STORAGE_BUCKET_NAME": self.s3_private_bucket_name,
@@ -168,6 +179,7 @@ class OCSConfig:
             "WHATSAPP_S3_AUDIO_BUCKET": self.s3_whatsapp_audio_bucket,
             "SENTRY_ENVIRONMENT": self._config.get("SENTRY_ENVIRONMENT", "development"),
             "DJANGO_ALLOWED_HOSTS": self.allowed_hosts,
+            **extra,
         }
         optional = [
             "PRIVACY_POLICY_URL",
