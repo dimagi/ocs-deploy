@@ -153,3 +153,15 @@ class GithubOidcStack(cdk.Stack):
                 effect=iam.Effect.ALLOW,
             )
         )
+        role.add_to_policy(
+            iam.PolicyStatement(
+                sid="GetMigrationLogs",
+                actions=[
+                    "logs:GetLogEvents",
+                ],
+                resources=[
+                    f"arn:aws:logs:{config.region}:{config.account}:log-group:{config.make_name('DjangoMigrationLogs')}:log-stream:*"
+                ],
+                effect=iam.Effect.ALLOW,
+            )
+        )
