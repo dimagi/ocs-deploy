@@ -115,3 +115,41 @@ class GithubOidcStack(cdk.Stack):
                 effect=iam.Effect.ALLOW,
             )
         )
+
+        # Permissions for running migration task
+        role.add_to_policy(
+            iam.PolicyStatement(
+                sid="RunMigrationTask",
+                actions=[
+                    "ecs:RunTask",
+                ],
+                resources=[
+                    f"arn:aws:ecs:{config.region}:{config.account}:task-definition/{config.make_name('Migration')}:*"
+                ],
+                effect=iam.Effect.ALLOW,
+            )
+        )
+        role.add_to_policy(
+            iam.PolicyStatement(
+                sid="DescribeTasks",
+                actions=[
+                    "ecs:DescribeTasks",
+                ],
+                resources=[
+                    f"arn:aws:ecs:{config.region}:{config.account}:task/{config.ecs_cluster_name}/*"
+                ],
+                effect=iam.Effect.ALLOW,
+            )
+        )
+        role.add_to_policy(
+            iam.PolicyStatement(
+                sid="GetStackOutputs",
+                actions=[
+                    "cloudformation:DescribeStacks",
+                ],
+                resources=[
+                    f"arn:aws:cloudformation:{config.region}:{config.account}:stack/{config.stack_name(OCSConfig.DJANGO_STACK)}/*"
+                ],
+                effect=iam.Effect.ALLOW,
+            )
+        )
