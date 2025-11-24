@@ -40,6 +40,7 @@ class OCSConfig:
     ]
 
     LOG_GROUP_DJANGO = "DjangoLogs"
+    LOG_GROUP_DJANGO_MIGRATIONS = "DjangoMigrationLogs"
     LOG_GROUP_CELERY = "CeleryWorkerLogs"
     LOG_GROUP_BEAT = "CeleryBeatLogs"
 

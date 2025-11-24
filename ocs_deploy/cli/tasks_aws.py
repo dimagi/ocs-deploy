@@ -202,6 +202,22 @@ def bootstrap(c: Context, profile=DEFAULT_PROFILE):
     )
 
 
+@task(auto_shortflags=False)
+def list_stacks(c: Context, profile=DEFAULT_PROFILE):
+    """Bootstrap the AWS environment.
+
+    This only needs to be run once per AWS account.
+    """
+    config = _get_config(c)
+    profile = get_profile_and_auth(c, profile)
+
+    c.run(
+        f"cdk list --profile {profile} --context ocs_env={config.environment}",
+        echo=True,
+        pty=True,
+    )
+
+
 def _get_services(services):
     if services == "ALL":
         services = ["django", "celery", "beat"]
