@@ -1,4 +1,7 @@
-from invoke import Context, task
+import json
+
+from invoke import Context, Exit, task
+from termcolor import cprint
 
 from ocs_deploy.config import OCSConfig
 from ocs_deploy.cli.tasks_aws_utils import (
@@ -36,6 +39,120 @@ def connect(c: Context, command="bash -l", service="django", profile=DEFAULT_PRO
         _ssm_connect(c, config, command, service, profile)
     else:
         _fargate_connect(c, config, command, service, profile)
+
+
+@task(
+    help=PROFILE_HELP,
+    auto_shortflags=False,
+)
+def migrate(c: Context, profile=DEFAULT_PROFILE):
+    """Run Django migrations as a one-off ECS task.
+
+    This runs the migration task definition and waits for it to complete.
+    Use this before deploying new code or when setting up a new environment.
+    """
+    config = _get_config(c)
+    profile = get_profile_and_auth(c, profile)
+
+    # Get stack outputs for network configuration
+    stack_name = config.stack_name(OCSConfig.DJANGO_STACK)
+    cprint(f"Getting network configuration from stack: {stack_name}", color="blue")
+
+    result = c.run(
+        aws_cli(
+            "cloudformation describe-stacks",
+            profile,
+            stack_name=stack_name,
+            query="Stacks[0].Outputs",
+            output="json",
+        ),
+        hide=True,
+    )
+    outputs = json.loads(result.stdout)
+
+    # Extract outputs by suffix
+    def get_output(suffix):
+        for output in outputs:
+            if output["OutputKey"].endswith(suffix):
+                return output["OutputValue"]
+        raise Exit(f"Could not find stack output ending with '{suffix}'", -1)
+
+    subnets = get_output("PrivateSubnets")
+    security_group = get_output("ServiceSecurityGroup")
+    task_definition = get_output("MigrationTaskArn")
+    cluster = config.make_name("Cluster")
+
+    cprint(f"Running migration task: {task_definition}", color="blue")
+
+    # Run the migration task
+    result = c.run(
+        aws_cli(
+            "ecs run-task",
+            profile,
+            cluster=cluster,
+            task_definition=task_definition,
+            launch_type="FARGATE",
+            network_configuration=f"awsvpcConfiguration={{subnets=[{subnets}],securityGroups=[{security_group}],assignPublicIp=DISABLED}}",
+            query="tasks[0].taskArn",
+            output="text",
+        ),
+        hide=True,
+    )
+    task_arn = result.stdout.strip()
+    task_id = task_arn.split("/")[-1]
+    cprint(f"Started migration task: {task_id}", color="green")
+
+    # Wait for task to complete
+    cprint("Waiting for migration to complete...", color="blue")
+    c.run(
+        aws_cli(
+            "ecs wait tasks-stopped",
+            profile,
+            cluster=cluster,
+            tasks=task_arn,
+        ),
+        hide=True,
+    )
+
+    # Show logs
+    log_group = config.make_name(config.LOG_GROUP_DJANGO_MIGRATIONS)
+    log_stream = f"{config.make_name('migrate')}/migrate/{task_id}"
+    cprint("\n--- Migration logs ---", color="blue")
+    result = c.run(
+        aws_cli(
+            "logs get-log-events",
+            profile,
+            log_group_name=log_group,
+            log_stream_name=log_stream,
+            query="events[*].message",
+            output="json",
+        ),
+        warn=True,
+        hide=True,
+    )
+    for line in json.loads(result.stdout):
+        print(line)
+    cprint("--- End logs ---\n", color="blue")
+
+    # Check exit code
+    result = c.run(
+        aws_cli(
+            "ecs describe-tasks",
+            profile,
+            cluster=cluster,
+            tasks=task_arn,
+            query="tasks[0].containers[0].exitCode",
+            output="text",
+        ),
+        hide=True,
+    )
+    exit_code = result.stdout.strip()
+
+    if exit_code != "0":
+        cprint(f"Migration failed with exit code: {exit_code}", color="red")
+        raise Exit("Migration failed", -1)
+
+    cprint("Migration completed successfully!", color="green")
 
 
 @task(
@@ -197,6 +314,22 @@ def bootstrap(c: Context, profile=DEFAULT_PROFILE):
 
     c.run(
         f"cdk bootstrap --profile {profile} --context ocs_env={config.environment}",
+        echo=True,
+        pty=True,
+    )
+
+
+@task(auto_shortflags=False)
+def list_stacks(c: Context, profile=DEFAULT_PROFILE):
+    """Bootstrap the AWS environment.
+
+    This only needs to be run once per AWS account.
+    """
+    config = _get_config(c)
+    profile = get_profile_and_auth(c, profile)
+
+    c.run(
+        f"cdk list --profile {profile} --context ocs_env={config.environment}",
         echo=True,
         pty=True,
     )

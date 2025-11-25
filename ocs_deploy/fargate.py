@@ -148,6 +148,43 @@ class FargateStack(cdk.Stack):
             min_healthy_percent=0,
         )
 
+        # Create migration task for one-off runs before deployments
+        self.migration_task_definition = self._get_migration_task_definition(
+            ecr_repo, config
+        )
+
+        # Get private subnets for migration task
+        private_subnets = vpc.select_subnets(
+            subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+        ).subnet_ids
+
+        cdk.CfnOutput(
+            self,
+            config.make_name("MigrationTaskArn"),
+            value=self.migration_task_definition.task_definition_arn,
+            description="ARN of the migration task definition for one-off runs",
+        )
+
+        cdk.CfnOutput(
+            self,
+            config.make_name("ClusterName"),
+            value=cluster.cluster_name,
+        )
+
+        cdk.CfnOutput(
+            self,
+            config.make_name("PrivateSubnets"),
+            value=",".join(private_subnets),
+        )
+
+        cdk.CfnOutput(
+            self,
+            config.make_name("ServiceSecurityGroup"),
+            value=django_web_service.service.connections.security_groups[
+                0
+            ].security_group_id,
+        )
+
         return django_web_service
 
     def _get_web_task_definition(self, ecr_repo, config: OCSConfig):
@@ -166,19 +203,8 @@ class FargateStack(cdk.Stack):
             task_role=self.task_role,
             family=config.make_name("Django"),
         )
-        migration_container = django_task.add_container(
-            id="django_container",
-            image=image,
-            container_name="migrate",
-            command=["python", "manage.py", "migrate"],
-            health_check=None,
-            essential=False,
-            environment=self.django_env,
-            secrets=self.secrets_dict,
-            logging=log_driver,
-        )
         first_allowed_host = config.allowed_hosts.split(",")[0].strip()
-        webserver_container = django_task.add_container(
+        django_task.add_container(
             id="web",
             image=image,
             container_name="web",
@@ -198,14 +224,44 @@ class FargateStack(cdk.Stack):
             ),
         )
 
-        webserver_container.add_container_dependencies(
-            ecs.ContainerDependency(
-                container=migration_container,
-                condition=ecs.ContainerDependencyCondition.SUCCESS,
-            )
+        return django_task
+
+    def _get_migration_task_definition(self, ecr_repo, config: OCSConfig):
+        """Create a dedicated task definition for running Django migrations.
+
+        This task should be run as a one-off ECS task before deploying
+        new versions of the web service.
+        """
+        log_group = self._get_log_group(
+            config.make_name(config.LOG_GROUP_DJANGO_MIGRATIONS)
+        )
+        log_driver = ecs.AwsLogDriver(
+            stream_prefix=config.make_name("migrate"), log_group=log_group
         )
 
-        return django_task
+        image = ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest")
+        migration_task = ecs.FargateTaskDefinition(
+            self,
+            id=config.make_name("Migration"),
+            cpu=512,
+            memory_limit_mib=1024,
+            execution_role=self.execution_role,
+            task_role=self.task_role,
+            family=config.make_name("Migration"),
+        )
+
+        migration_task.add_container(
+            id="migrate",
+            image=image,
+            container_name="migrate",
+            command=["python", "manage.py", "migrate"],
+            essential=True,
+            environment=self.django_env,
+            secrets=self.secrets_dict,
+            logging=log_driver,
+        )
+
+        return migration_task
 
     def _get_log_group(self, name):
         return logs.LogGroup(

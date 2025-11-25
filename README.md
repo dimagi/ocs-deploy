@@ -23,12 +23,10 @@ The architecture consists of various AWS components:
 - **Elasticache Redis**
 - **Elastic Container Registry (ECR)**
 - **ECS Fargate** services for the Django application, including:
-  - **Django web service**:
-    - Runs two containers: one for executing migrations and another for running the Gunicorn server.
-    - The migrations container runs first and the Gunicorn container starts afterward.
-    - The service is behind an Application Load Balancer (ALB) with a health check target group.
+  - **Django web service**: Runs the Gunicorn server behind an Application Load Balancer (ALB) with a health check target group.
   - **Celery worker service**
   - **Celery beat service**
+  - **Migration task**: A one-off task definition for running Django migrations before deployments.
 
 Additional components set up by this project include:
 
@@ -131,9 +129,33 @@ Edit the generated `.env.{env name}` file to set your required configurations.
     ocs --env <env> aws.deploy --stacks django
     ```
 
+6. **Run Initial Migrations**
+
+    ```bash
+    ocs --env <env> aws.migrate
+    ```
+
 ## Steady State Deployment Steps
 
 After the initial deployment, you can deploy any stack independently. Typically, you will only run the CDK deploy when changing infrastructure. For code deployments, use the GitHub Actions defined in the [Open Chat Studio](https://github.com/dimagi/open-chat-studio/) repository.
+
+### Running Migrations
+
+Migrations are run as a one-off ECS task, separate from the web service deployment. This ensures migrations only run once rather than on every container startup.
+
+**For automated deployments**: The GitHub Actions workflow handles running migrations before updating services.
+
+**For manual deployments**: Run migrations before deploying new code:
+
+```bash
+ocs --env <env> aws.migrate
+```
+
+This command will:
+- Run the migration task in ECS
+- Wait for completion
+- Display the migration logs
+- Report success or failure
 
 ## Connecting to Running Services
 
