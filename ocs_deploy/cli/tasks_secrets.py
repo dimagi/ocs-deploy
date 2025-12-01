@@ -69,12 +69,10 @@ def get_secret_value(c: Context, name, profile=DEFAULT_PROFILE):
 
 @task(
     name="set",
-    help={
-        "name": "Name of the secret to set",
-    }
+    help={"name": "Name of the secret to set", "file": "Read the value from the file"}
     | PROFILE_HELP,
 )
-def set_secret_value(c: Context, name, profile=DEFAULT_PROFILE):
+def set_secret_value(c: Context, name, file=None, profile=DEFAULT_PROFILE):
     """Set a secret value by name."""
     config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
@@ -96,7 +94,12 @@ def set_secret_value(c: Context, name, profile=DEFAULT_PROFILE):
             exit_message="Aborted",
         )
 
-    value = input(f"Enter value for secret {name} (blank to skip): ")
+    if file:
+        with open(file, "r") as f:
+            value = f.read().strip()
+    else:
+        value = input(f"Enter value for secret {name} (blank to skip): ")
+
     if not value:
         print("Skipping...")
         return
