@@ -132,21 +132,22 @@ class FargateStack(cdk.Stack):
             scale_out_cooldown=cdk.Duration.seconds(120),
         )
 
-        ecs.FargateService(
-            self,
-            config.make_name("CeleryBeatService"),
-            cluster=cluster,
-            desired_count=1,
-            service_name=config.ecs_celery_beat_service_name,
-            task_definition=self._get_celery_task_definition(
-                ecr_repo, config, is_beat=True
-            ),
-            enable_execute_command=True,
-            circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
-            # we only ever want 1 beat service running
-            max_healthy_percent=100,
-            min_healthy_percent=0,
-        )
+        # disable celery beat
+        # ecs.FargateService(
+        #     self,
+        #     config.make_name("CeleryBeatService"),
+        #     cluster=cluster,
+        #     desired_count=1,
+        #     service_name=config.ecs_celery_beat_service_name,
+        #     task_definition=self._get_celery_task_definition(
+        #         ecr_repo, config, is_beat=True
+        #     ),
+        #     enable_execute_command=True,
+        #     circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
+        #     # we only ever want 1 beat service running
+        #     max_healthy_percent=100,
+        #     min_healthy_percent=0,
+        # )
 
         # Create migration task for one-off runs before deployments
         self.migration_task_definition = self._get_migration_task_definition(
@@ -295,7 +296,8 @@ class FargateStack(cdk.Stack):
         else:
             log_group_name = config.LOG_GROUP_CELERY
             name = "CeleryWorkerTask"
-            command = "celery -A gpt_playground worker -l INFO --pool=threads --concurrency 4".split(
+            # command = "celery -A gpt_playground worker -l INFO --pool=threads --concurrency 4".split(
+            command = "taskiq worker config.tkq:broker --tasks-pattern '**/tasks_async.py' --fs-discover".split(
                 " "
             )
             container_name = "celery-worker"
