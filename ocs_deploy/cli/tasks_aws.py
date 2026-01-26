@@ -175,25 +175,11 @@ def deploy(
     with_dependencies=False,
 ):
     """Deploy the specified stacks. If no stacks are specified, all stacks will be deployed."""
-    profile = get_profile_and_auth(c, profile)
-
-    config = _get_config(c)
-    cmd = "cdk deploy"
-    if stacks:
-        stacks = " ".join([config.stack_name(stack) for stack in stacks.split(",")])
-        cmd += f" {stacks}"
-        if not with_dependencies:
-            cmd += " --exclusively"
-    else:
-        confirm("Deploy all stacks ?", _exit=True, exit_message="Aborted")
-        cmd += " --all"
-    if verbose:
-        cmd += " --verbose"
-
-    cmd += f" --profile {profile} --context ocs_env={config.environment}"
-    cmd += " --require-approval " + ("never" if skip_approval else "any-change")
-    cmd += " --progress events"
-    c.run(cmd, echo=True, pty=True)
+    args = " --progress events"
+    args += " --require-approval " + ("never" if skip_approval else "any-change")
+    if not stacks and not with_dependencies:
+        args += " --exclusively"
+    _run_cdk_stack_command(c, "destroy", stacks, verbose, profile, extra_args=args)
 
 
 @task(
@@ -211,18 +197,32 @@ def diff(
     profile=DEFAULT_PROFILE,
 ):
     """Generate of list of changes to be deployed."""
-    profile = get_profile_and_auth(c, profile)
+    _run_cdk_stack_command(c, "diff", stacks, verbose, profile)
 
-    config = _get_config(c)
-    cmd = f"cdk diff --profile {profile} --context ocs_env={config.environment}"
-    if stacks:
-        stacks = " ".join([config.stack_name(stack) for stack in stacks.split(",")])
-        cmd += f" {stacks}"
-    else:
-        cmd += " --all"
-    if verbose:
-        cmd += " --verbose"
-    c.run(cmd, echo=True, pty=True)
+
+@task(
+    help={
+        "stacks": STACKS_HELP,
+        "verbose": "Enable verbose output",
+    }
+    | PROFILE_HELP,
+    auto_shortflags=False,
+)
+def destroy(
+    c: Context,
+    stacks=None,
+    verbose=False,
+    profile=DEFAULT_PROFILE,
+):
+    """Destroy stacks"""
+    stacks_msg = stacks or "all stacks"
+    confirm(
+        f"Are you sure you want to destroy {stacks_msg}? This cannot be undone.",
+        _exit=True,
+        exit_message="Aborted",
+    )
+    args = "--force"
+    _run_cdk_stack_command(c, "destroy", stacks, verbose, profile, extra_args=args)
 
 
 @task(
@@ -309,14 +309,7 @@ def bootstrap(c: Context, profile=DEFAULT_PROFILE):
 
     This only needs to be run once per AWS account.
     """
-    config = _get_config(c)
-    profile = get_profile_and_auth(c, profile)
-
-    c.run(
-        f"cdk bootstrap --profile {profile} --context ocs_env={config.environment}",
-        echo=True,
-        pty=True,
-    )
+    _run_cdk(c, "bootstrap", profile=profile)
 
 
 @task(auto_shortflags=False)
@@ -325,14 +318,7 @@ def list_stacks(c: Context, profile=DEFAULT_PROFILE):
 
     This only needs to be run once per AWS account.
     """
-    config = _get_config(c)
-    profile = get_profile_and_auth(c, profile)
-
-    c.run(
-        f"cdk list --profile {profile} --context ocs_env={config.environment}",
-        echo=True,
-        pty=True,
-    )
+    _run_cdk(c, "list", profile=profile)
 
 
 def _get_services(services):
@@ -341,3 +327,37 @@ def _get_services(services):
     else:
         services = [s.strip() for s in services.split(",")]
     return services
+
+
+def _run_cdk_stack_command(
+    c: Context,
+    command,
+    stacks=None,
+    verbose=False,
+    profile=DEFAULT_PROFILE,
+    extra_args=None,
+):
+    config = _get_config(c)
+    extra_args = extra_args or ""
+    if stacks:
+        stacks = " ".join([config.stack_name(stack) for stack in stacks.split(",")])
+        extra_args += f" {stacks}"
+    else:
+        confirm(f"Run '{command}' on all stacks ?", _exit=True, exit_message="Aborted")
+        extra_args += " --all"
+
+    _run_cdk(c, command, verbose, profile, extra_args=extra_args)
+
+
+def _run_cdk(
+    c: Context, command, verbose=False, profile=DEFAULT_PROFILE, extra_args=None
+):
+    profile = get_profile_and_auth(c, profile)
+
+    config = _get_config(c)
+    cmd = f"cdk {command} --profile {profile} --context ocs_env={config.environment}"
+    if verbose:
+        cmd += " --verbose"
+    if extra_args:
+        cmd += f" {extra_args}"
+    c.run(cmd, echo=True, pty=True)
