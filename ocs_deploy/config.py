@@ -180,6 +180,10 @@ class OCSConfig:
             "WHATSAPP_S3_AUDIO_BUCKET": self.s3_whatsapp_audio_bucket,
             "SENTRY_ENVIRONMENT": self._config.get("SENTRY_ENVIRONMENT", "development"),
             "DJANGO_ALLOWED_HOSTS": self.allowed_hosts,
+            "SYSTEM_AGENT_MODELS_HIGH": self._config.get(
+                "SYSTEM_AGENT_MODELS_HIGH", ""
+            ),
+            "SYSTEM_AGENT_MODELS_LOW": self._config.get("SYSTEM_AGENT_MODELS_LOW", ""),
             **extra,
         }
         optional = [
