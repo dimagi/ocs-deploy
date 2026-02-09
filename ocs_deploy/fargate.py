@@ -295,7 +295,7 @@ class FargateStack(cdk.Stack):
         else:
             log_group_name = config.LOG_GROUP_CELERY
             name = "CeleryWorkerTask"
-            command = "celery -A gpt_playground worker -l INFO --pool=threads --concurrency 4".split(
+            command = "celery -A gpt_playground worker -l INFO --pool=threads --concurrency 10".split(
                 " "
             )
             container_name = "celery-worker"
