@@ -179,7 +179,7 @@ def deploy(
     args += " --require-approval " + ("never" if skip_approval else "any-change")
     if not stacks and not with_dependencies:
         args += " --exclusively"
-    _run_cdk_stack_command(c, "destroy", stacks, verbose, profile, extra_args=args)
+    _run_cdk_stack_command(c, "deploy", stacks, verbose, profile, extra_args=args)
 
 
 @task(
