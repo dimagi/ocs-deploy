@@ -42,19 +42,6 @@ class VpcStack(cdk.Stack):
 
         vpc.add_gateway_endpoint("S3", service=ec2.GatewayVpcEndpointAwsService.S3)
 
-        # Needed for ECS tasks (managed in Fargate) to pull images
-        vpc.add_interface_endpoint(
-            "EcsEndpoint", service=ec2.InterfaceVpcEndpointAwsService.ECS
-        )
-        # Needed for fargate to pull initial image from ECR
-        vpc.add_interface_endpoint(
-            "EcrEndpoint", service=ec2.InterfaceVpcEndpointAwsService.ECR
-        )
-        # TODO: Unclear if we need this
-        vpc.add_interface_endpoint(
-            "EcrDockerEndpoint", service=ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER
-        )
-
         self._setup_flow_logs(config, vpc)
 
         return vpc
