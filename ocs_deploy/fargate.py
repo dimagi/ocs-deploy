@@ -59,13 +59,13 @@ class FargateStack(cdk.Stack):
         )
         https_sg.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(443))
 
-        # define a cluster with spot instances, linux type
         cluster = ecs.Cluster(
             self,
             config.make_name("DeploymentCluster"),
             vpc=vpc,
             container_insights=True,
             cluster_name=config.ecs_cluster_name,
+            enable_fargate_capacity_providers=True,
         )
 
         # See https://blog.cloudglance.dev/deep-dive-on-ecs-desired-count-and-circuit-breaker-rollback/index.html
@@ -119,6 +119,17 @@ class FargateStack(cdk.Stack):
             ),
             enable_execute_command=True,
             circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
+            capacity_provider_strategies=[
+                ecs.CapacityProviderStrategy(
+                    capacity_provider="FARGATE",
+                    base=1,  # 1 worker always on standard Fargate for guaranteed capacity
+                    weight=0,
+                ),
+                ecs.CapacityProviderStrategy(
+                    capacity_provider="FARGATE_SPOT",
+                    weight=1,  # all additional workers on Spot (~70% savings)
+                ),
+            ],
         )
 
         celery_scaling = celery_worker_service.auto_scale_task_count(

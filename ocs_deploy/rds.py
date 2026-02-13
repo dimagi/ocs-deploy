@@ -67,9 +67,8 @@ class RdsStack(cdk.Stack):
             engine=rds.DatabaseInstanceEngine.postgres(
                 version=rds.PostgresEngineVersion.VER_16,
             ),
-            # db.t4g.small
             instance_type=ec2.InstanceType.of(
-                ec2.InstanceClass.T4G, ec2.InstanceSize.SMALL
+                ec2.InstanceClass.T4G, ec2.InstanceSize.MEDIUM
             ),
             allocated_storage=20,
             max_allocated_storage=100,
