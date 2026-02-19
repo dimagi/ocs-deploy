@@ -174,7 +174,7 @@ class OCSConfig:
             "DJANGO_DATABASE_PORT": rds_port,
             "DJANGO_EMAIL_BACKEND": "anymail.backends.amazon_ses.EmailBackend",
             "DJANGO_SECURE_SSL_REDIRECT": "false",  # handled by the load balancer
-            "DJANGO_SETTINGS_MODULE": "gpt_playground.settings_production",
+            "DJANGO_SETTINGS_MODULE": "config.settings_production",
             "PORT": str(self.CONTAINER_PORT),
             "USE_S3_STORAGE": "True",
             "WHATSAPP_S3_AUDIO_BUCKET": self.s3_whatsapp_audio_bucket,

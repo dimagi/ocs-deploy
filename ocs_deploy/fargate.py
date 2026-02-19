@@ -288,9 +288,7 @@ class FargateStack(cdk.Stack):
             log_group_name = config.LOG_GROUP_BEAT
             name = "CeleryBeatTask"
             pidfile = "/tmp/celerybeat.pid"
-            command = (
-                f"celery -A gpt_playground beat -l INFO --pidfile {pidfile}".split(" ")
-            )
+            command = f"celery -A config beat -l INFO --pidfile {pidfile}".split(" ")
             container_name = "celery-beat"
             health_check = ecs.HealthCheck(
                 command=[
@@ -306,8 +304,10 @@ class FargateStack(cdk.Stack):
         else:
             log_group_name = config.LOG_GROUP_CELERY
             name = "CeleryWorkerTask"
-            command = "celery -A gpt_playground worker -l INFO --pool=threads --concurrency 10".split(
-                " "
+            command = (
+                "celery -A config worker -l INFO --pool=threads --concurrency 10".split(
+                    " "
+                )
             )
             container_name = "celery-worker"
             cpu = 512  # 0.5 vCPU
@@ -316,7 +316,7 @@ class FargateStack(cdk.Stack):
             # health_check = ecs.HealthCheck(
             #     command=[
             #         "CMD-SHELL",
-            #         "celery -A gpt_playground inspect ping --destination celery@$HOSTNAME",
+            #         "celery -A config inspect ping --destination celery@$HOSTNAME",
             #     ],
             #     interval=cdk.Duration.seconds(30),
             #     timeout=cdk.Duration.seconds(5),
