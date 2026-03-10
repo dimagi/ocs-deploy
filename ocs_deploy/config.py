@@ -172,6 +172,9 @@ class OCSConfig:
             "DJANGO_DATABASE_NAME": self.rds_db_name,
             "DJANGO_DATABASE_HOST": rds_host,
             "DJANGO_DATABASE_PORT": rds_port,
+            "DJANGO_DATABASE_SSLMODE": self._config.get(
+                "DJANGO_DATABASE_SSLMODE", "require"
+            ),
             "DJANGO_EMAIL_BACKEND": "anymail.backends.amazon_ses.EmailBackend",
             "DJANGO_SECURE_SSL_REDIRECT": "false",  # handled by the load balancer
             "DJANGO_SETTINGS_MODULE": "config.settings_production",
