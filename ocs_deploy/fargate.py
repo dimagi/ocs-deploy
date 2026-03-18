@@ -300,7 +300,7 @@ class FargateStack(cdk.Stack):
                 retries=4,
             )
             cpu = 256
-            memory = 512
+            memory = 1024
         else:
             log_group_name = config.LOG_GROUP_CELERY
             name = "CeleryWorkerTask"
