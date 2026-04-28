@@ -18,6 +18,7 @@ class OCSConfig:
     RDS_STACK = "rds"
     REDIS_STACK = "redis"
     DJANGO_STACK = "django"
+    SES_INBOUND_STACK = "ses-inbound"
     WAF_STACK = "waf"
     GUARD_DUTY_STACK = "guardduty"
     SECURITYHUB_STACK = "securityhub"
@@ -33,6 +34,7 @@ class OCSConfig:
         RDS_STACK,
         REDIS_STACK,
         DJANGO_STACK,
+        SES_INBOUND_STACK,
         WAF_STACK,
         GUARD_DUTY_STACK,
         SECURITYHUB_STACK,
@@ -60,6 +62,10 @@ class OCSConfig:
         self.region = self._config["CDK_REGION"]
 
         self.email_domain = self._config["EMAIL_DOMAIN"]
+        raw_inbound = self._config.get("EMAIL_INBOUND_DOMAINS", "") or ""
+        self.email_inbound_domains = [
+            d.strip() for d in raw_inbound.split(",") if d.strip()
+        ]
         self.domain_name = self._config["DOMAIN_NAME"]
 
         self.app_name = self._config.get("APP_NAME", "ocs")
@@ -151,6 +157,21 @@ class OCSConfig:
     @property
     def s3_whatsapp_audio_bucket(self):
         return self.make_name("s3-whatsapp-audio")
+
+    @property
+    def all_inbound_domains(self):
+        """Primary email domain plus any extras from EMAIL_INBOUND_DOMAINS, primary first, deduped."""
+        seen = set()
+        ordered = []
+        for d in [self.email_domain, *self.email_inbound_domains]:
+            if d and d not in seen:
+                ordered.append(d)
+                seen.add(d)
+        return ordered
+
+    @property
+    def anymail_webhook_secret_name(self):
+        return self.make_secret_name("anymail-webhook-secret")
 
     def get_celery_env(self, rds_host, rds_port):
         return self._get_common_env(
