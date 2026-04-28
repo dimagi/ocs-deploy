@@ -1,3 +1,5 @@
+import re
+
 import aws_cdk as cdk
 from aws_cdk import aws_ses as ses, aws_certificatemanager as acm
 from constructs import Construct
@@ -5,19 +7,33 @@ from constructs import Construct
 from ocs_deploy.config import OCSConfig
 
 
-class DomainStack(cdk.Stack):
-    """Create Domain Certificate and Email identity for SES
+def _slug(domain: str) -> str:
+    """Convert a domain to a CFN-safe construct id suffix."""
+    return re.sub(r"[^A-Za-z0-9]", "", domain.title())
 
-    There is still a manual step of adding the validation records to the DNS.
+
+class DomainStack(cdk.Stack):
+    """Create Domain Certificate and SES EmailIdentity per inbound domain.
+
+    DNS validation records (cert + DKIM) are emitted as CfnOutputs for the
+    operator to add manually.
     """
 
     def __init__(self, scope: Construct, config: OCSConfig) -> None:
         super().__init__(
             scope, config.stack_name(OCSConfig.DOMAINS_STACK), env=config.cdk_env()
         )
-
+        self.config = config
         self.certificate = self.create_certificate(config)
-        self.email_identity = self.create_email_identity(config)
+        self.configuration_set = ses.ConfigurationSet(
+            self,
+            config.make_name("SesConfigurationSet"),
+            configuration_set_name="Default",
+        )
+        self.email_identities = {
+            domain: self._create_identity(domain)
+            for domain in config.all_inbound_domains
+        }
 
     def create_certificate(self, config):
         return acm.Certificate(
@@ -28,27 +44,21 @@ class DomainStack(cdk.Stack):
             validation=acm.CertificateValidation.from_dns(),
         )
 
-    def create_email_identity(self, config):
-        configuration_set = ses.ConfigurationSet(
+    def _create_identity(self, domain: str) -> ses.EmailIdentity:
+        slug = _slug(domain)
+        identity = ses.EmailIdentity(
             self,
-            config.make_name("SesConfigurationSet"),
-            configuration_set_name="Default",
+            self.config.make_name(f"EmailIdentity-{slug}"),
+            identity=ses.Identity.domain(domain),
+            configuration_set=self.configuration_set,
         )
+        identity.apply_removal_policy(cdk.RemovalPolicy.RETAIN)
 
-        email_identity = ses.EmailIdentity(
-            self,
-            config.make_name("EmailIdentity"),
-            identity=ses.Identity.domain(config.email_domain),
-            configuration_set=configuration_set,
-        )
-        email_identity.apply_removal_policy(cdk.RemovalPolicy.RETAIN)
-
-        for i, record in enumerate(email_identity.dkim_records):
+        for i, record in enumerate(identity.dkim_records):
             cdk.CfnOutput(
                 self,
-                config.make_name(f"EmailIdentityDKIMRecord{i}"),
-                value=f"{record.name}.	1	IN	CNAME	{record.value}. ; SES for {config.domain_name}",
-                export_name=f"EmailIdentityDKIMRecord{i}",
+                self.config.make_name(f"EmailIdentityDKIMRecord-{slug}-{i}"),
+                value=f"{record.name}.\t1\tIN\tCNAME\t{record.value}. ; SES DKIM for {domain}",
+                export_name=f"EmailIdentityDKIMRecord-{slug}-{i}",
             )
-
-        return email_identity
+        return identity
