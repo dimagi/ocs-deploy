@@ -53,7 +53,15 @@ class SesInboundStack(cdk.Stack):
                 actions=["s3:PutObject"],
                 resources=[f"{bucket.bucket_arn}/{INBOUND_PREFIX}*"],
                 conditions={
-                    "StringEquals": {"aws:SourceAccount": self.config.account},
+                    "StringEquals": {
+                        "aws:SourceAccount": self.config.account,
+                        "aws:SourceArn": (
+                            f"arn:aws:ses:{self.config.region}"
+                            f":{self.config.account}"
+                            f":receipt-rule-set/{self.config.make_name('inbound')}"
+                            f":receipt-rule/*"
+                        ),
+                    },
                 },
             )
         )

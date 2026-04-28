@@ -13,6 +13,7 @@ from aws_cdk import (
 from constructs import Construct
 
 from ocs_deploy.config import OCSConfig
+from ocs_deploy.ses_inbound import INBOUND_PREFIX
 
 
 class FargateStack(cdk.Stack):
@@ -493,7 +494,9 @@ class FargateStack(cdk.Stack):
             iam.PolicyStatement(
                 actions=["s3:GetObject"],
                 effect=iam.Effect.ALLOW,
-                resources=[f"{self.ses_inbound_stack.bucket.bucket_arn}/inbound/*"],
+                resources=[
+                    f"{self.ses_inbound_stack.bucket.bucket_arn}/{INBOUND_PREFIX}*"
+                ],
             )
         )
         return task_role

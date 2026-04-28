@@ -59,7 +59,10 @@ def test_bucket_policy_allows_ses_putobject(ocs_config):
                                     "Action": "s3:PutObject",
                                     "Condition": {
                                         "StringEquals": {
-                                            "aws:SourceAccount": "111111111111"
+                                            "aws:SourceAccount": "111111111111",
+                                            "aws:SourceArn": assertions.Match.string_like_regexp(
+                                                r"arn:aws:ses:us-east-1:111111111111:receipt-rule-set/.*:receipt-rule/\*$"
+                                            ),
                                         }
                                     },
                                 }
