@@ -2,6 +2,10 @@ import aws_cdk as cdk
 from aws_cdk import (
     aws_iam as iam,
     aws_s3 as s3,
+    aws_secretsmanager as secretsmanager,
+    aws_ses as ses,
+    aws_ses_actions as ses_actions,
+    aws_sns as sns,
 )
 from constructs import Construct
 
@@ -19,6 +23,9 @@ class SesInboundStack(cdk.Stack):
         )
         self.config = config
         self.bucket = self._create_bucket()
+        self.topic = self._create_topic()
+        self.webhook_secret = self._create_webhook_secret()
+        self.rule_set, self.rule = self._create_receipt_rules()
 
     def _create_bucket(self) -> s3.Bucket:
         bucket = s3.Bucket(
@@ -54,3 +61,69 @@ class SesInboundStack(cdk.Stack):
             value=bucket.bucket_name,
         )
         return bucket
+
+    def _create_topic(self) -> sns.Topic:
+        topic = sns.Topic(
+            self,
+            self.config.make_name("SesInboundTopic"),
+            topic_name=self.config.make_name("ses-inbound"),
+            display_name="OCS SES Inbound",
+        )
+        cdk.CfnOutput(
+            self,
+            self.config.make_name("SesInboundTopicArn"),
+            value=topic.topic_arn,
+        )
+        return topic
+
+    def _create_webhook_secret(self) -> secretsmanager.Secret:
+        return secretsmanager.Secret(
+            self,
+            self.config.make_name("AnymailWebhookSecret"),
+            secret_name=self.config.anymail_webhook_secret_name,
+            description="Basic-auth value used by anymail's SES inbound webhook.",
+            generate_secret_string=secretsmanager.SecretStringGenerator(
+                password_length=32,
+                exclude_characters=":/@\"' \\",
+                exclude_punctuation=False,
+            ),
+        )
+
+    def _create_receipt_rules(self) -> tuple[ses.ReceiptRuleSet, ses.ReceiptRule]:
+        rule_set = ses.ReceiptRuleSet(
+            self,
+            self.config.make_name("SesInboundRuleSet"),
+            receipt_rule_set_name=self.config.make_name("inbound"),
+        )
+        rule = rule_set.add_rule(
+            self.config.make_name("DeliverInboundMail"),
+            recipients=self.config.all_inbound_domains,
+            scan_enabled=True,
+            enabled=True,
+            actions=[
+                ses_actions.S3(
+                    bucket=self.bucket,
+                    object_key_prefix=INBOUND_PREFIX,
+                ),
+                ses_actions.Sns(
+                    topic=self.topic,
+                    encoding=ses_actions.EmailEncoding.BASE64,
+                ),
+            ],
+        )
+
+        cdk.CfnOutput(
+            self,
+            self.config.make_name("SesInboundRuleSetName"),
+            value=rule_set.receipt_rule_set_name,
+        )
+        cdk.CfnOutput(
+            self,
+            self.config.make_name("ActivateReceiptRuleSetCommand"),
+            value=(
+                f"aws ses set-active-receipt-rule-set "
+                f"--rule-set-name {rule_set.receipt_rule_set_name}"
+            ),
+            description="Run this once after deploy to make the rule set active.",
+        )
+        return rule_set, rule
