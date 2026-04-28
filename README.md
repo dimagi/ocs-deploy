@@ -166,11 +166,11 @@ Inbound email is delivered to the Django app via SES → S3 → SNS → anymail 
    ```
 
 5. **Add DNS records** for each inbound domain:
-   - **MX** (priority 10): `inbound-smtp.us-east-1.amazonaws.com`
+   - **MX** (priority 10): `inbound-smtp.<CDK_REGION>.amazonaws.com` (e.g. `inbound-smtp.us-east-1.amazonaws.com` for the default region).
    - **DKIM CNAMEs** (×3 per domain): values are stack outputs from the `domains` stack, named `EmailIdentityDKIMRecord-<DomainSlug>-<index>`.
 
 6. **Test** by sending an email to `support@<your-inbound-domain>`. Confirm:
-   - `aws s3 ls s3://ocs-<env>-ses-inbound-mail/inbound/` shows the message.
+   - `aws s3 ls s3://<SesInboundBucketName from output>/inbound/` shows the message.
    - Django CloudWatch logs show the anymail inbound signal firing.
 
 **Failure modes worth knowing:**
