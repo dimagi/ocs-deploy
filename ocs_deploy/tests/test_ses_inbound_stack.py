@@ -79,20 +79,16 @@ def test_sns_topic_created(ocs_config):
 
 def test_anymail_webhook_secret_excludes_url_unsafe_chars(ocs_config):
     template = _synth(ocs_config)
-    template.has_resource_properties(
-        "AWS::SecretsManager::Secret",
-        {
-            "Name": "ocs/test/anymail-webhook-secret",
-            "GenerateSecretString": assertions.Match.object_like(
-                {
-                    "ExcludeCharacters": assertions.Match.string_like_regexp(
-                        ".*[:/@].*"
-                    ),
-                    "PasswordLength": 32,
-                }
-            ),
-        },
-    )
+    secrets = template.find_resources("AWS::SecretsManager::Secret")
+    assert len(secrets) == 1
+    props = next(iter(secrets.values()))["Properties"]
+    assert props["Name"] == "ocs/test/anymail-webhook-secret"
+    gen = props["GenerateSecretString"]
+    assert gen["PasswordLength"] == 32
+    excluded = gen["ExcludeCharacters"]
+    # Every char that breaks URL embedding must be in the exclude set.
+    for required in [":", "/", "@", "?", "#", "%", "[", "]"]:
+        assert required in excluded, f"{required!r} must be in ExcludeCharacters"
 
 
 def test_receipt_rule_set_created(ocs_config):

@@ -84,7 +84,7 @@ class SesInboundStack(cdk.Stack):
             description="Basic-auth value used by anymail's SES inbound webhook.",
             generate_secret_string=secretsmanager.SecretStringGenerator(
                 password_length=32,
-                exclude_characters=":/@\"' \\",
+                exclude_characters=":/@\"' \\?#%[]",
                 exclude_punctuation=False,
             ),
         )
