@@ -33,6 +33,7 @@ class FargateStack(cdk.Stack):
         rds_stack,
         redis_stack,
         domain_stack,
+        ses_inbound_stack,
         config: OCSConfig,
     ) -> None:
         super().__init__(
@@ -43,6 +44,7 @@ class FargateStack(cdk.Stack):
         self.rds_stack = rds_stack
         self.redis_stack = redis_stack
         self.domain_stack = domain_stack
+        self.ses_inbound_stack = ses_inbound_stack
 
         self.fargate_service = self.setup_fargate_service(vpc, ecr_repo, config)
         # Expose ALB ARN for WAF
@@ -381,6 +383,9 @@ class FargateStack(cdk.Stack):
             # "AWS_SES_REGION":
             # "AWS_SES_SECRET_KEY":
         }
+        secrets["ANYMAIL_WEBHOOK_SECRET"] = ecs.Secret.from_secrets_manager(
+            self.ses_inbound_stack.webhook_secret
+        )
         for secret in self.config.get_existing_secrets_list():
             secrets[secret.env_var] = ecs.Secret.from_secrets_manager(
                 secretsmanager.Secret.from_secret_name_v2(
@@ -475,6 +480,20 @@ class FargateStack(cdk.Stack):
                 ],
                 effect=iam.Effect.ALLOW,
                 resources=["*"],
+            )
+        )
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["sns:ConfirmSubscription"],
+                effect=iam.Effect.ALLOW,
+                resources=[self.ses_inbound_stack.topic.topic_arn],
+            )
+        )
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["s3:GetObject"],
+                effect=iam.Effect.ALLOW,
+                resources=[f"{self.ses_inbound_stack.bucket.bucket_arn}/inbound/*"],
             )
         )
         return task_role
