@@ -143,3 +143,29 @@ def test_receipt_rule_actions_are_s3_then_sns(ocs_config):
             ),
         },
     )
+
+
+def test_sns_subscription_is_https_to_webhook_path(ocs_config):
+    template = _synth(ocs_config)
+    template.has_resource_properties(
+        "AWS::SNS::Subscription",
+        assertions.Match.object_like(
+            {
+                "Protocol": "https",
+                "Endpoint": assertions.Match.string_like_regexp(
+                    r".*ocs\.example\.com/anymail/amazon_ses/inbound/$"
+                ),
+            }
+        ),
+    )
+
+
+def test_sns_subscription_endpoint_uses_secret_dynamic_reference(ocs_config):
+    template = _synth(ocs_config)
+    subs = template.find_resources("AWS::SNS::Subscription")
+    assert len(subs) == 1
+    endpoint = next(iter(subs.values()))["Properties"]["Endpoint"]
+    # CDK emits a CFN dynamic reference that resolves the secret at deploy time.
+    rendered = str(endpoint)
+    assert "{{resolve:secretsmanager:" in rendered
+    assert "anymail-webhook-secret" in rendered

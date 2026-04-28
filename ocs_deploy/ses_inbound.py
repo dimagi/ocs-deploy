@@ -6,6 +6,7 @@ from aws_cdk import (
     aws_ses as ses,
     aws_ses_actions as ses_actions,
     aws_sns as sns,
+    aws_sns_subscriptions as sns_subs,
 )
 from constructs import Construct
 
@@ -26,6 +27,7 @@ class SesInboundStack(cdk.Stack):
         self.topic = self._create_topic()
         self.webhook_secret = self._create_webhook_secret()
         self.rule_set, self.rule = self._create_receipt_rules()
+        self._add_webhook_subscription()
 
     def _create_bucket(self) -> s3.Bucket:
         bucket = s3.Bucket(
@@ -127,3 +129,15 @@ class SesInboundStack(cdk.Stack):
             description="Run this once after deploy to make the rule set active.",
         )
         return rule_set, rule
+
+    def _add_webhook_subscription(self) -> None:
+        secret_value = cdk.SecretValue.secrets_manager(
+            self.config.anymail_webhook_secret_name
+        ).unsafe_unwrap()
+        endpoint = (
+            f"https://anymail:{secret_value}@"
+            f"{self.config.domain_name}/anymail/amazon_ses/inbound/"
+        )
+        self.topic.add_subscription(
+            sns_subs.UrlSubscription(endpoint, protocol=sns.SubscriptionProtocol.HTTPS)
+        )
