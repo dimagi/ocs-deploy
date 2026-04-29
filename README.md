@@ -155,6 +155,7 @@ Inbound email is delivered to the Django app via SES → S3 → SNS → anymail 
    ```bash
    ocs --env <env> aws.deploy --stacks django
    ```
+   Django settings must format the secret as `f"anymail:{os.environ['ANYMAIL_WEBHOOK_SECRET']}"` for `ANYMAIL["WEBHOOK_SECRET"]`. The forwarder Lambda sends HTTP Basic auth with `anymail` as the username, and anymail compares the base64-decoded header against `WEBHOOK_SECRET` verbatim.
 
 4. **Activate the receipt rule set** (one-time):
    ```bash

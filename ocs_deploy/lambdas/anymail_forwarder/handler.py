@@ -15,6 +15,11 @@ import boto3
 
 SECRET_NAME = os.environ["ANYMAIL_WEBHOOK_SECRET_NAME"]
 WEBHOOK_URL = os.environ["ANYMAIL_WEBHOOK_URL"]
+# The Django app's ANYMAIL["WEBHOOK_SECRET"] setting must be set to
+# f"{WEBHOOK_USER}:{<secret-from-secrets-manager>}" so anymail's basic-auth
+# check (which compares the base64-decoded header to the configured value
+# verbatim) succeeds.
+WEBHOOK_USER = "anymail"
 HTTP_TIMEOUT_SECONDS = 10
 
 _secrets_client = boto3.client("secretsmanager")
@@ -30,8 +35,7 @@ def _get_secret() -> str:
 
 
 def _basic_auth_header() -> str:
-    secret = _get_secret()
-    creds = f"{secret}:{secret}".encode()
+    creds = f"{WEBHOOK_USER}:{_get_secret()}".encode()
     return "Basic " + base64.b64encode(creds).decode("ascii")
 
 
