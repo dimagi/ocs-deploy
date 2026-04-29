@@ -31,7 +31,9 @@ class DomainStack(cdk.Stack):
             configuration_set_name="Default",
         )
         self.email_identities = {
-            domain: self._create_identity(domain)
+            domain: self._create_identity(
+                domain, is_primary=domain == config.email_domain
+            )
             for domain in config.all_inbound_domains
         }
 
@@ -44,21 +46,33 @@ class DomainStack(cdk.Stack):
             validation=acm.CertificateValidation.from_dns(),
         )
 
-    def _create_identity(self, domain: str) -> ses.EmailIdentity:
-        slug = _slug(domain)
+    def _create_identity(self, domain: str, is_primary: bool) -> ses.EmailIdentity:
+        # The primary identity keeps the un-suffixed construct ID so its CFN
+        # logical ID matches the already-deployed resource. Renaming would
+        # orphan-and-recreate, which fails because the orphan still owns the
+        # domain in SES.
+        if is_primary:
+            identity_suffix = "EmailIdentity"
+            record_prefix = "EmailIdentityDKIMRecord"
+        else:
+            slug = _slug(domain)
+            identity_suffix = f"EmailIdentity-{slug}"
+            record_prefix = f"EmailIdentityDKIMRecord-{slug}-"
+
         identity = ses.EmailIdentity(
             self,
-            self.config.make_name(f"EmailIdentity-{slug}"),
+            self.config.make_name(identity_suffix),
             identity=ses.Identity.domain(domain),
             configuration_set=self.configuration_set,
         )
         identity.apply_removal_policy(cdk.RemovalPolicy.RETAIN)
 
         for i, record in enumerate(identity.dkim_records):
+            name = f"{record_prefix}{i}"
             cdk.CfnOutput(
                 self,
-                self.config.make_name(f"EmailIdentityDKIMRecord-{slug}-{i}"),
+                self.config.make_name(name),
                 value=f"{record.name}.\t1\tIN\tCNAME\t{record.value}. ; SES DKIM for {domain}",
-                export_name=f"EmailIdentityDKIMRecord-{slug}-{i}",
+                export_name=name,
             )
         return identity
