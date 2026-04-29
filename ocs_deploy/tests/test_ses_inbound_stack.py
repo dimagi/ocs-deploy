@@ -148,27 +148,83 @@ def test_receipt_rule_actions_are_s3_then_sns(ocs_config):
     )
 
 
-def test_sns_subscription_is_https_to_webhook_path(ocs_config):
+def test_sns_subscription_targets_forwarder_lambda(ocs_config):
+    template = _synth(ocs_config)
+    subs = template.find_resources("AWS::SNS::Subscription")
+    assert len(subs) == 1
+    props = next(iter(subs.values()))["Properties"]
+    assert props["Protocol"] == "lambda"
+    # Endpoint should be a Fn::GetAtt to the forwarder Lambda's ARN, never a
+    # raw URL with an embedded `{{resolve:secretsmanager:...}}` reference
+    # (CFN does not resolve those for SNS subscription endpoints, which fails
+    # at deploy with "Invalid parameter: HTTP(S) Endpoint URL").
+    endpoint = props["Endpoint"]
+    assert isinstance(endpoint, dict) and "Fn::GetAtt" in endpoint
+    assert "{{resolve:secretsmanager:" not in str(endpoint)
+
+
+def test_forwarder_lambda_has_webhook_url_and_secret_env(ocs_config):
     template = _synth(ocs_config)
     template.has_resource_properties(
-        "AWS::SNS::Subscription",
+        "AWS::Lambda::Function",
         assertions.Match.object_like(
             {
-                "Protocol": "https",
-                "Endpoint": assertions.Match.string_like_regexp(
-                    r".*ocs\.example\.com/anymail/amazon_ses/inbound/$"
-                ),
+                "Handler": "handler.handler",
+                "Environment": {
+                    "Variables": {
+                        "ANYMAIL_WEBHOOK_SECRET_NAME": "ocs/test/anymail-webhook-secret",
+                        "ANYMAIL_WEBHOOK_URL": "https://ocs.example.com/anymail/amazon_ses/inbound/",
+                    }
+                },
             }
         ),
     )
 
 
-def test_sns_subscription_endpoint_uses_secret_dynamic_reference(ocs_config):
+def test_forwarder_webhook_url_uses_anymail_webhook_domain_override(
+    ocs_config_factory,
+):
+    config = ocs_config_factory(
+        DOMAIN_NAME="new.example.com",
+        ANYMAIL_WEBHOOK_DOMAIN="legacy.example.com",
+    )
+    template = _synth(config)
+    template.has_resource_properties(
+        "AWS::Lambda::Function",
+        assertions.Match.object_like(
+            {
+                "Environment": {
+                    "Variables": assertions.Match.object_like(
+                        {
+                            "ANYMAIL_WEBHOOK_URL": "https://legacy.example.com/anymail/amazon_ses/inbound/",
+                        }
+                    ),
+                },
+            }
+        ),
+    )
+
+
+def test_forwarder_lambda_can_read_webhook_secret(ocs_config):
     template = _synth(ocs_config)
-    subs = template.find_resources("AWS::SNS::Subscription")
-    assert len(subs) == 1
-    endpoint = next(iter(subs.values()))["Properties"]["Endpoint"]
-    # CDK emits a CFN dynamic reference that resolves the secret at deploy time.
-    rendered = str(endpoint)
-    assert "{{resolve:secretsmanager:" in rendered
-    assert "anymail-webhook-secret" in rendered
+    template.has_resource_properties(
+        "AWS::IAM::Policy",
+        assertions.Match.object_like(
+            {
+                "PolicyDocument": {
+                    "Statement": assertions.Match.array_with(
+                        [
+                            assertions.Match.object_like(
+                                {
+                                    "Effect": "Allow",
+                                    "Action": assertions.Match.array_with(
+                                        ["secretsmanager:GetSecretValue"]
+                                    ),
+                                }
+                            )
+                        ]
+                    ),
+                }
+            }
+        ),
+    )

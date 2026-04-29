@@ -1,6 +1,9 @@
+from pathlib import Path
+
 import aws_cdk as cdk
 from aws_cdk import (
     aws_iam as iam,
+    aws_lambda as lambda_,
     aws_s3 as s3,
     aws_secretsmanager as secretsmanager,
     aws_ses as ses,
@@ -13,6 +16,7 @@ from constructs import Construct
 from ocs_deploy.config import OCSConfig
 
 INBOUND_PREFIX = "inbound/"
+ANYMAIL_FORWARDER_ASSET = Path(__file__).parent / "lambdas" / "anymail_forwarder"
 
 
 class SesInboundStack(cdk.Stack):
@@ -139,13 +143,22 @@ class SesInboundStack(cdk.Stack):
         return rule_set, rule
 
     def _add_webhook_subscription(self) -> None:
-        secret_value = cdk.SecretValue.secrets_manager(
-            self.config.anymail_webhook_secret_name
-        ).unsafe_unwrap()
-        endpoint = (
-            f"https://anymail:{secret_value}@"
-            f"{self.config.domain_name}/anymail/amazon_ses/inbound/"
+        webhook_url = (
+            f"https://{self.config.anymail_webhook_domain}"
+            "/anymail/amazon_ses/inbound/"
         )
-        self.topic.add_subscription(
-            sns_subs.UrlSubscription(endpoint, protocol=sns.SubscriptionProtocol.HTTPS)
+        forwarder = lambda_.Function(
+            self,
+            self.config.make_name("AnymailForwarderFn"),
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="handler.handler",
+            code=lambda_.Code.from_asset(str(ANYMAIL_FORWARDER_ASSET)),
+            timeout=cdk.Duration.seconds(15),
+            environment={
+                "ANYMAIL_WEBHOOK_SECRET_NAME": self.config.anymail_webhook_secret_name,
+                "ANYMAIL_WEBHOOK_URL": webhook_url,
+            },
         )
+        self.webhook_secret.grant_read(forwarder)
+        self.topic.add_subscription(sns_subs.LambdaSubscription(forwarder))
+        self.forwarder = forwarder

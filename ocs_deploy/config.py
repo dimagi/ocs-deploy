@@ -67,6 +67,12 @@ class OCSConfig:
             d.strip() for d in raw_inbound.split(",") if d.strip()
         ]
         self.domain_name = self._config["DOMAIN_NAME"]
+        # Where the Django app actually serves anymail's SES inbound webhook.
+        # Decoupled from `domain_name` so the webhook URL doesn't have to move
+        # in lockstep with the apex domain during a domain migration.
+        self.anymail_webhook_domain = (
+            self._config.get("ANYMAIL_WEBHOOK_DOMAIN") or self.domain_name
+        )
 
         self.app_name = self._config.get("APP_NAME", "ocs")
         self.maintenance_window = self._config.get(
