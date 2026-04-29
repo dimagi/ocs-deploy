@@ -135,6 +135,50 @@ Edit the generated `.env.{env name}` file to set your required configurations.
     ocs --env <env> aws.migrate
     ```
 
+### Configure Inbound Email (optional)
+
+Inbound email is delivered to the Django app via SES → S3 → SNS → anymail webhook.
+
+1. **Set the inbound domains** in `.env.<env>`:
+   ```
+   EMAIL_INBOUND_DOMAINS=chat2.openchatstudio.com
+   ```
+   The primary `EMAIL_DOMAIN` is always included automatically. Leave the var empty for a single-domain setup.
+
+2. **Deploy the SES inbound stack:**
+   ```bash
+   ocs --env <env> aws.deploy --stacks ses-inbound
+   ```
+   Note the outputs — they include the SNS topic ARN, the bucket name, the receipt rule set name, and the activation command.
+
+3. **Re-deploy Django** so it picks up `ANYMAIL_WEBHOOK_SECRET` and the new IAM permissions:
+   ```bash
+   ocs --env <env> aws.deploy --stacks django
+   ```
+   Django settings must format the secret as `f"anymail:{os.environ['ANYMAIL_WEBHOOK_SECRET']}"` for `ANYMAIL["WEBHOOK_SECRET"]`. The forwarder Lambda sends HTTP Basic auth with `anymail` as the username, and anymail compares the base64-decoded header against `WEBHOOK_SECRET` verbatim.
+
+4. **Activate the receipt rule set** (one-time):
+   ```bash
+   aws ses set-active-receipt-rule-set --rule-set-name <RuleSetName from output>
+   ```
+   Only one rule set per region can be active. Verify with:
+   ```bash
+   aws ses describe-active-receipt-rule-set
+   ```
+
+5. **Add DNS records** for each inbound domain:
+   - **MX** (priority 10): `inbound-smtp.<CDK_REGION>.amazonaws.com` (e.g. `inbound-smtp.us-east-1.amazonaws.com` for the default region).
+   - **DKIM CNAMEs** (×3 per domain): values are stack outputs from the `domains` stack, named `EmailIdentityDKIMRecord-<DomainSlug>-<index>`.
+
+6. **Test** by sending an email to `support@<your-inbound-domain>`. Confirm:
+   - `aws s3 ls s3://<SesInboundBucketName from output>/inbound/` shows the message.
+   - Django CloudWatch logs show the anymail inbound signal firing.
+
+**Failure modes worth knowing:**
+- If the SNS subscription is left "Pending Confirmation" in the AWS console, the Django task role is missing `sns:ConfirmSubscription` — re-deploy the django stack. As a manual workaround, click the confirmation URL in the SNS console.
+- If mail delivery silently stops, check `aws ses describe-active-receipt-rule-set` — only one rule set per region can be active, and a region-wide change can deactivate yours.
+- The S3 bucket has a 7-day lifecycle on `inbound/`. Don't store anything else there.
+
 ## Steady State Deployment Steps
 
 After the initial deployment, you can deploy any stack independently. Typically, you will only run the CDK deploy when changing infrastructure. For code deployments, use the GitHub Actions defined in the [Open Chat Studio](https://github.com/dimagi/open-chat-studio/) repository.
