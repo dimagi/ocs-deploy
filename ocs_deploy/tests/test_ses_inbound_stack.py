@@ -119,7 +119,14 @@ def test_receipt_rule_recipients_include_all_domains(ocs_config_factory):
     )
 
 
-def test_receipt_rule_actions_are_s3_then_sns(ocs_config):
+def test_receipt_rule_has_single_s3_action_with_sns_topic(ocs_config):
+    """Rule has exactly one action — an S3 action that also notifies SNS.
+
+    A separate SNSAction would force SES to inline the email body in the SNS
+    notification, which caps inbound mail at 150 KB. Using S3Action.topic
+    publishes only a metadata "Received" notification; anymail fetches the
+    body from S3 via the Fargate task role.
+    """
     template = _synth(ocs_config)
     template.has_resource_properties(
         "AWS::SES::ReceiptRule",
@@ -130,14 +137,10 @@ def test_receipt_rule_actions_are_s3_then_sns(ocs_config):
                         assertions.Match.object_like(
                             {
                                 "S3Action": assertions.Match.object_like(
-                                    {"ObjectKeyPrefix": "inbound/"}
-                                )
-                            }
-                        ),
-                        assertions.Match.object_like(
-                            {
-                                "SNSAction": assertions.Match.object_like(
-                                    {"Encoding": "Base64"}
+                                    {
+                                        "ObjectKeyPrefix": "inbound/",
+                                        "TopicArn": assertions.Match.any_value(),
+                                    }
                                 )
                             }
                         ),
@@ -146,6 +149,19 @@ def test_receipt_rule_actions_are_s3_then_sns(ocs_config):
             ),
         },
     )
+
+
+def test_receipt_rule_has_no_separate_sns_action(ocs_config):
+    """Guard against re-introducing the inline-body SNSAction."""
+    template = _synth(ocs_config)
+    rules = template.find_resources("AWS::SES::ReceiptRule")
+    assert len(rules) == 1
+    actions = next(iter(rules.values()))["Properties"]["Rule"]["Actions"]
+    for action in actions:
+        assert "SNSAction" not in action, (
+            f"SNSAction must not appear on the receipt rule (found in {action!r}); "
+            "the SNS notification path is now driven by S3Action.topic."
+        )
 
 
 def test_sns_subscription_targets_forwarder_lambda(ocs_config):
