@@ -118,10 +118,7 @@ class SesInboundStack(cdk.Stack):
                 ses_actions.S3(
                     bucket=self.bucket,
                     object_key_prefix=INBOUND_PREFIX,
-                ),
-                ses_actions.Sns(
                     topic=self.topic,
-                    encoding=ses_actions.EmailEncoding.BASE64,
                 ),
             ],
         )
