@@ -1,6 +1,8 @@
+import base64
 import json
 import os
 import shlex
+from pathlib import Path
 
 from invoke import Context, Exit, task
 from termcolor import cprint
@@ -41,6 +43,31 @@ def django_manage(c: Context, command, profile=DEFAULT_PROFILE):
         aws.connect --service django --command "python manage.py {command}"
     """
     _shell(c, profile, command)
+
+
+@task(
+    help={
+        "script": "Path to a local Python file to execute remotely.",
+        "service": "Service to run the script on. One of [django, celery, beat]. Defaults to 'django'.",
+        **PROFILE_HELP,
+    },
+    auto_shortflags=False,
+)
+def run_script(c: Context, script, service="django", profile=DEFAULT_PROFILE):
+    """Run a local Python script in the remote Django environment.
+
+    The script is base64-encoded and piped into 'python manage.py shell' on the
+    running container, so it executes with full Django context.
+    """
+    path = Path(script)
+    if not path.is_file():
+        raise Exit(f"Script not found: {script}", -1)
+
+    config = _get_config(c)
+    profile = get_profile_and_auth(c, profile)
+    encoded = base64.b64encode(path.read_bytes()).decode()
+    command = f"bash -c 'echo {encoded} | base64 -d | python manage.py shell'"
+    _fargate_connect(c, config, command, service, profile)
 
 
 def _shell(c: Context, profile=DEFAULT_PROFILE, mgmt_command="shell"):
