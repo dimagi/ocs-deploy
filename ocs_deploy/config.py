@@ -226,6 +226,9 @@ class OCSConfig:
             "TASKBADGER_PROJECT",
             "DJANGO_SERVER_EMAIL",
             "DJANGO_DEFAULT_FROM_EMAIL",
+            "HUBSPOT_FORM_PORTAL_ID",
+            "HUBSPOT_FORM_ID",
+            "PRELOGIN_CONTACT_EMAIL",
         ]
         for key in optional:
             if value := self._config.get(key):
