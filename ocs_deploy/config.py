@@ -220,6 +220,7 @@ class OCSConfig:
         optional = [
             "PRIVACY_POLICY_URL",
             "TERMS_URL",
+            "ACCEPTABLE_USE_POLICY_URL",
             "SIGNUP_ENABLED",
             "SLACK_BOT_NAME",
             "TASKBADGER_ORG",
