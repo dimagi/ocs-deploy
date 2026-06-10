@@ -8,6 +8,7 @@ SizeRestrictions_BODY = [
     r"^/a/([-a-zA-Z0-9_]+)/assistants/new/$",
     r"^/a/([-a-zA-Z0-9_]+)/documents/collections/([0-9]+)/add_files$",
     r"^/a/([-a-zA-Z0-9_]+)/evaluations/dataset/new/$",
+    r"^/a/([-a-zA-Z0-9_]+)/evaluations/evaluator/([0-9]+)/$",
     r"^/a/([-a-zA-Z0-9_]+)/evaluations/evaluator/new/$",
     r"^/a/([-a-zA-Z0-9_]+)/evaluations/parse_csv_columns/$",
     r"^/a/([-a-zA-Z0-9_]+)/experiments/e/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/v/([0-9]+)/session/([^/]+)/embed/message/$",
@@ -20,14 +21,18 @@ SizeRestrictions_BODY = [
     r"^/users/profile/upload\-image/$",
 ]
 
+
 # URI patterns for endpoints that may not send User-Agent header
 # These bypass only NoUserAgent_HEADER, all other protections remain active
 NoUserAgent_HEADER = [
     r"^/$",
     r"^/a/([-a-zA-Z0-9_]+)/chatbots/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/s/([^/]+)/chat/$",
     r"^/a/([-a-zA-Z0-9_]+)/chatbots/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/start/$",
+    r"^/about/$",
+    r"^/applications/$",
     r"^/channels/sureadhere/([^/]+)/incoming_message$",
     r"^/channels/telegram/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
+    r"^/open\-opportunities/$",
     r"^/robots\.txt$",
     r"^/sitemap\.xml$",
 ]
