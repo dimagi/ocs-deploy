@@ -301,6 +301,8 @@ class FargateStack(cdk.Stack):
                 interval=cdk.Duration.seconds(30),
                 timeout=cdk.Duration.seconds(5),
                 retries=4,
+                # startup grace period
+                start_period=cdk.Duration.seconds(60),
             )
             cpu = 256
             memory = 1024
