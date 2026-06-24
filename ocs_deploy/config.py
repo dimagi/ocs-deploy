@@ -230,6 +230,7 @@ class OCSConfig:
             "HUBSPOT_FORM_PORTAL_ID",
             "HUBSPOT_FORM_ID",
             "PRELOGIN_CONTACT_EMAIL",
+            "TEAM_METADATA_FIELDS",
         ]
         for key in optional:
             if value := self._config.get(key):
