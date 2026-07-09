@@ -197,10 +197,7 @@ def _ssm_connect(c, config, command, service, profile):
     )
 
 
-def _fargate_connect(c: Context, config, command, service, profile):
-    cluster = config.make_name("Cluster")
-    service, container = _get_service_and_container(config, service)
-
+def _get_fargate_task(c: Context, cluster, service, profile, task=None):
     result = c.run(
         aws_cli("ecs list-tasks", profile, service=service, cluster=cluster),
         hide=True,
@@ -213,7 +210,42 @@ def _fargate_connect(c: Context, config, command, service, profile):
             -1,
         )
 
-    fargate_task = tasks[0]
+    if task:
+        matches = [arn for arn in tasks if _task_id(arn).startswith(task)]
+        if not matches:
+            raise Exit(
+                f"No running task matches '{task}'. Running tasks:\n"
+                + "\n".join(f"  {_task_id(arn)}" for arn in tasks),
+                -1,
+            )
+        if len(matches) > 1:
+            raise Exit(
+                f"'{task}' matches multiple tasks:\n"
+                + "\n".join(f"  {_task_id(arn)}" for arn in matches),
+                -1,
+            )
+        return matches[0]
+
+    if len(tasks) > 1:
+        cprint(
+            f"'{service}' has {len(tasks)} running tasks; using {_task_id(tasks[0])}.\n"
+            "Pass --task <id-prefix> to target a specific one:\n"
+            + "\n".join(f"  {_task_id(arn)}" for arn in tasks),
+            color="yellow",
+        )
+    return tasks[0]
+
+
+def _task_id(task_arn):
+    return task_arn.split("/")[-1]
+
+
+def _fargate_connect(c: Context, config, command, service, profile, task=None):
+    cluster = config.make_name("Cluster")
+    service, container = _get_service_and_container(config, service)
+
+    fargate_task = _get_fargate_task(c, cluster, service, profile, task)
+    cprint(f"Connecting to task {_task_id(fargate_task)}", color="blue")
     c.run(
         aws_cli(
             "ecs execute-command",
@@ -227,6 +259,66 @@ def _fargate_connect(c: Context, config, command, service, profile):
         echo=True,
         pty=True,
     )
+
+
+# Markers wrapping the base64 payload so we can discard the SSM session
+# banner ("Starting session..." / "Exiting session...") from the exec output.
+# Keep these free of shell metacharacters (>, <, |, etc.) so the remote
+# `echo` prints them literally instead of treating them as redirections.
+_GET_FILE_START = "OCS_GETFILE_BEGIN_9f3a2b"
+_GET_FILE_END = "OCS_GETFILE_END_9f3a2b"
+
+
+def _fargate_get_file(c: Context, config, remote, local, service, profile, task=None):
+    cluster = config.make_name("Cluster")
+    service_name, container = _get_service_and_container(config, service)
+    fargate_task = _get_fargate_task(c, cluster, service_name, profile, task)
+
+    local_path = Path(local) if local else Path(Path(remote).name)
+    quoted_remote = shlex.quote(remote)
+    remote_cmd = (
+        f"sh -c 'if [ ! -f {quoted_remote} ]; then echo MISSING >&2; exit 1; fi; "
+        f"echo {_GET_FILE_START}; base64 {quoted_remote}; echo {_GET_FILE_END}'"
+    )
+
+    result = c.run(
+        aws_cli(
+            "ecs execute-command",
+            profile,
+            cluster=cluster,
+            task=fargate_task,
+            container=container,
+            command=remote_cmd,
+            interactive=True,
+        ),
+        hide=True,
+        pty=True,
+        warn=True,
+    )
+
+    encoded = _extract_between(result.stdout, _GET_FILE_START, _GET_FILE_END)
+    if encoded is None:
+        raise Exit(
+            f"Could not read '{remote}' from the '{service}' container. "
+            "The file may not exist or may be unreadable. Remote output:\n"
+            + result.stdout.strip(),
+            -1,
+        )
+
+    # b64decode ignores the CRs and line wrapping the pty session introduces.
+    local_path.write_bytes(base64.b64decode(encoded))
+    cprint(f"Wrote {local_path} ({local_path.stat().st_size} bytes)", color="green")
+
+
+def _extract_between(text, start, end):
+    start_idx = text.find(start)
+    if start_idx == -1:
+        return None
+    start_idx += len(start)
+    end_idx = text.find(end, start_idx)
+    if end_idx == -1:
+        return None
+    return text[start_idx:end_idx]
 
 
 def _get_service_and_container(config, service):

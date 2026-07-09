@@ -9,6 +9,7 @@ from ocs_deploy.cli.tasks_aws_utils import (
     NoQuote,
     PROFILE_HELP,
     _fargate_connect,
+    _fargate_get_file,
     _get_config,
     _get_service_and_container,
     _ssm_connect,
@@ -26,11 +27,18 @@ SERVICES_HELP = "Services to target [ALL, django, celery, beat]. Separate multip
     help={
         "command": "Command to execute in the container. Defaults to '/bin/bash'",
         "service": "Service to connect to. One of [django, celery, beat, ec2tmp]. Defaults to 'django'",
+        "task": "Target a specific task by ID prefix. Defaults to the first running task.",
     }
     | PROFILE_HELP,
     auto_shortflags=False,
 )
-def connect(c: Context, command="bash -l", service="django", profile=DEFAULT_PROFILE):
+def connect(
+    c: Context,
+    command="bash -l",
+    service="django",
+    task=None,
+    profile=DEFAULT_PROFILE,
+):
     """Connect to a running ECS container and execute the given command."""
     config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
@@ -38,7 +46,36 @@ def connect(c: Context, command="bash -l", service="django", profile=DEFAULT_PRO
     if service == "ec2tmp":
         _ssm_connect(c, config, command, service, profile)
     else:
-        _fargate_connect(c, config, command, service, profile)
+        _fargate_connect(c, config, command, service, profile, task)
+
+
+@task(
+    help={
+        "remote": "Path to the file on the remote container.",
+        "local": "Local path to write to. Defaults to the file's basename in the current directory.",
+        "service": "Service to fetch from. One of [django, celery, beat]. Defaults to 'django'.",
+        "task": "Target a specific task by ID prefix. Defaults to the first running task.",
+    }
+    | PROFILE_HELP,
+    auto_shortflags=False,
+)
+def get_file(
+    c: Context,
+    remote,
+    local=None,
+    service="django",
+    task=None,
+    profile=DEFAULT_PROFILE,
+):
+    """Download a file from a running ECS container to your machine.
+
+    The file is base64-encoded in the container and streamed back over the
+    'ecs execute-command' channel, then decoded locally. Best for small to
+    medium files.
+    """
+    config = _get_config(c)
+    profile = get_profile_and_auth(c, profile)
+    _fargate_get_file(c, config, remote, local, service, profile, task)
 
 
 @task(
