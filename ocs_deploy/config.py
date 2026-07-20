@@ -215,6 +215,7 @@ class OCSConfig:
                 "SYSTEM_AGENT_MODELS_HIGH", ""
             ),
             "SYSTEM_AGENT_MODELS_LOW": self._config.get("SYSTEM_AGENT_MODELS_LOW", ""),
+            "DEFER_PYDANTIC_BUILD": self._config.get("DEFER_PYDANTIC_BUILD", ""),
             **extra,
         }
         optional = [
