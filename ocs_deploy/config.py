@@ -1,4 +1,5 @@
 import dataclasses
+import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -81,6 +82,16 @@ class OCSConfig:
 
         self.github_repo = self._config.get("GITHUB_REPO", "dimagi/open-chat-studio")
         self.allowed_hosts = self._config["DJANGO_ALLOWED_HOSTS"]
+
+        self._validate_json_field("TEAM_METADATA_FIELDS")
+
+    def _validate_json_field(self, key):
+        value = self._config.get(key)
+        if value:
+            try:
+                json.loads(value)
+            except json.JSONDecodeError as e:
+                raise Exception(f"Invalid JSON in {key}: {e}") from e
 
     def stack_name(self, name: str):
         if name not in self.ALL_STACKS:
