@@ -125,12 +125,7 @@ class FargateStack(cdk.Stack):
             capacity_provider_strategies=[
                 ecs.CapacityProviderStrategy(
                     capacity_provider="FARGATE",
-                    base=1,  # 1 worker always on standard Fargate for guaranteed capacity
-                    weight=0,
-                ),
-                ecs.CapacityProviderStrategy(
-                    capacity_provider="FARGATE_SPOT",
-                    weight=1,  # all additional workers on Spot (~70% savings)
+                    weight=1,
                 ),
             ],
         )
@@ -355,6 +350,9 @@ class FargateStack(cdk.Stack):
             logging=log_driver,
             command=command,
             health_check=health_check,
+            # Give workers the full window ECS allows (default is 30s) to
+            # finish in-flight jobs after SIGTERM before they are SIGKILLed.
+            stop_timeout=cdk.Duration.seconds(120),
         )
 
         return celery_task
