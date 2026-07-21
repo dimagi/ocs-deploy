@@ -125,12 +125,7 @@ class FargateStack(cdk.Stack):
             capacity_provider_strategies=[
                 ecs.CapacityProviderStrategy(
                     capacity_provider="FARGATE",
-                    base=1,  # 1 worker always on standard Fargate for guaranteed capacity
-                    weight=0,
-                ),
-                ecs.CapacityProviderStrategy(
-                    capacity_provider="FARGATE_SPOT",
-                    weight=1,  # all additional workers on Spot (~70% savings)
+                    weight=1,
                 ),
             ],
         )
