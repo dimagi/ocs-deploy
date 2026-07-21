@@ -350,6 +350,9 @@ class FargateStack(cdk.Stack):
             logging=log_driver,
             command=command,
             health_check=health_check,
+            # Give workers the full window ECS allows (default is 30s) to
+            # finish in-flight jobs after SIGTERM before they are SIGKILLed.
+            stop_timeout=cdk.Duration.seconds(120),
         )
 
         return celery_task
