@@ -229,6 +229,27 @@ The environment name is also used to set the default AWS CLI profile:
 AWS_PROFILE="ocs-<env>"  # e.g., "ocs-dev"
 ```
 
+### Sharing `.env` files via 1Password
+
+The `.env.<env>` files are shared with the team through 1Password (stored as
+document items). Syncing is handled with the [1Password CLI](https://developer.1password.com/docs/cli/get-started/)
+(`op`), so make sure it is installed and you are signed in.
+
+```bash
+# Download .env.dev from 1Password (prompts before overwriting a local file)
+ocs --env dev env.pull
+
+# Upload your local .env.dev to 1Password (prompts before overwriting the item)
+ocs --env dev env.push
+```
+
+The vault and item name are configurable:
+
+- `OP_VAULT` — the 1Password vault to use (or pass `--vault`). Defaults to
+  `GSO: Open Chat Studio Team (OCS)`.
+- `OP_ITEM_TEMPLATE` — the document item name, with `{env}` substituted.
+  Defaults to `ocs .env.{env}` (e.g. `ocs .env.dev`).
+
 ## Adding Environment Variables
 
 ### Non-Secret Environment Variable
