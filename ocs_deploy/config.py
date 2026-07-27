@@ -235,8 +235,6 @@ class OCSConfig:
             "ACCEPTABLE_USE_POLICY_URL",
             "SIGNUP_ENABLED",
             "SLACK_BOT_NAME",
-            "TASKBADGER_ORG",
-            "TASKBADGER_PROJECT",
             "DJANGO_SERVER_EMAIL",
             "DJANGO_DEFAULT_FROM_EMAIL",
             "HUBSPOT_FORM_PORTAL_ID",
