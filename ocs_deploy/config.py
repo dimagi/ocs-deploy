@@ -84,6 +84,7 @@ class OCSConfig:
         self.allowed_hosts = self._config["DJANGO_ALLOWED_HOSTS"]
 
         self._validate_json_field("TEAM_METADATA_FIELDS")
+        self._validate_json_field("PRELOGIN_DEMO_BOTS")
 
     def _validate_json_field(self, key):
         value = self._config.get(key)
@@ -240,6 +241,7 @@ class OCSConfig:
             "HUBSPOT_FORM_PORTAL_ID",
             "HUBSPOT_FORM_ID",
             "PRELOGIN_CONTACT_EMAIL",
+            "PRELOGIN_DEMO_BOTS",
             "TEAM_METADATA_FIELDS",
         ]
         for key in optional:
