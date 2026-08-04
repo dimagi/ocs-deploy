@@ -7,6 +7,7 @@ from typing import List, Tuple
 SizeRestrictions_BODY = [
     r"^/a/([-a-zA-Z0-9_]+)/assistants/new/$",
     r"^/a/([-a-zA-Z0-9_]+)/documents/collections/([0-9]+)/add_files$",
+    r"^/a/([-a-zA-Z0-9_]+)/evaluations/dataset/([0-9]+)/add\-sessions/$",
     r"^/a/([-a-zA-Z0-9_]+)/evaluations/dataset/new/$",
     r"^/a/([-a-zA-Z0-9_]+)/evaluations/evaluator/([0-9]+)/$",
     r"^/a/([-a-zA-Z0-9_]+)/evaluations/evaluator/new/$",
@@ -29,10 +30,13 @@ NoUserAgent_HEADER = [
     r"^/a/([-a-zA-Z0-9_]+)/chatbots/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/s/([^/]+)/chat/$",
     r"^/a/([-a-zA-Z0-9_]+)/chatbots/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/start/$",
     r"^/about/$",
+    r"^/api/docs/$",
     r"^/applications/$",
     r"^/channels/sureadhere/([^/]+)/incoming_message$",
     r"^/channels/telegram/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
+    r"^/contact/$",
     r"^/open\-opportunities/$",
+    r"^/platform/$",
     r"^/robots\.txt$",
     r"^/sitemap\.xml$",
 ]
