@@ -27,13 +27,13 @@ def _generate_matching_example(pattern):
         )
         .replace(r"([0-9]+)", "42")
         .replace(r"([^/]+)", "XYZ")
-        # Optional literal groups, e.g. the "(?:v1/)?" in the API paths
-        .replace(r"(?:v1/)?", "v1/")
         .replace(r"\.", ".")
         .replace(r"\-", "-")
         .replace(r"^", "")
         .replace(r"$", "")
     )
+    # Take the "present" branch of optional literal groups, e.g. "(?:v1/)?" or "(_mime)?"
+    naive_example = re.sub(r"\((?:\?:)?([^()|]*)\)\?", r"\1", naive_example)
     example = rstr.xeger(pattern)
     return [naive_example, example]
 
