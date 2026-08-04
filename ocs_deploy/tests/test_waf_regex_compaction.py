@@ -99,6 +99,40 @@ def test_compact_regex_lists__restricts_group_sizes():
         assert len(group) <= 10, f"{idx} has too many regexes: {len(group)}"
 
 
+@pytest.mark.parametrize(
+    "patterns",
+    [
+        pytest.param(SizeRestrictions_BODY, id="SizeRestrictions_BODY"),
+        pytest.param(NoUserAgent_HEADER, id="NoUserAgent_HEADER"),
+    ],
+)
+def test_every_pattern_survives_compaction_of_its_own_rule_list(patterns):
+    """Each rule's list is compacted on its own, exactly as ``WAFStack`` deploys it.
+
+    Compacting the two lists together (as the other tests do) hides ordering-dependent losses:
+    "^/$" reduces to an empty alternative, which used to be dropped whenever it landed at the
+    start of a buffer — as it does when NoUserAgent_HEADER is compacted by itself.
+    """
+    compiled = [
+        re.compile(regex)
+        for group in create_waf_regex_groupings(patterns)
+        for regex in group
+    ]
+    for pattern in patterns:
+        example = rstr.xeger(pattern)
+        assert any(
+            regex.match(example) for regex in compiled
+        ), f"{pattern!r} (example {example!r}) is not matched by any deployed regex"
+
+
+def test_pattern_that_is_only_its_affixes_is_kept():
+    assert compact_waf_regexes([r"^/$"]) == [r"^/$"]
+
+
+def test_empty_pattern_is_not_dropped_from_the_start_of_a_buffer():
+    assert compact_waf_regexes_simply(["", "abc"]) == ["|abc"]
+
+
 def _test_compact_function_against_examples(compact_function, example):
     compacted_patterns = compact_function(PATTERNS_TO_TEST)
 

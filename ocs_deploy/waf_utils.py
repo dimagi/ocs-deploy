@@ -53,18 +53,20 @@ def compact_waf_regexes_simply(patterns: List[str], max_length: int = 200) -> Li
     respecting max_length constraint.
     """
     compacted_regexes = []
-    regex_buffer = ""
+    # Tracked as a list rather than a concatenated string: an empty pattern is a legitimate
+    # alternative (it is what "^/$" reduces to once its affixes are stripped), and testing the
+    # buffer for truthiness silently discarded it.
+    buffer: List[str] = []
+    buffer_length = 0
     for pattern in patterns:
-        if len(regex_buffer) + len(pattern) + 1 <= max_length:
-            if regex_buffer:
-                regex_buffer += "|" + pattern
-            else:
-                regex_buffer = pattern
-        else:
-            compacted_regexes.append(regex_buffer)
-            regex_buffer = pattern
-    if regex_buffer:
-        compacted_regexes.append(regex_buffer)
+        # +1 for the "|" that will join this pattern to a non-empty buffer
+        if buffer and buffer_length + len(pattern) + 1 > max_length:
+            compacted_regexes.append("|".join(buffer))
+            buffer, buffer_length = [], 0
+        buffer_length += len(pattern) + (1 if buffer else 0)
+        buffer.append(pattern)
+    if buffer:
+        compacted_regexes.append("|".join(buffer))
     return compacted_regexes
 
 
@@ -83,10 +85,12 @@ def compact_waf_regexes(
     # Group patterns by matching prefix/suffix pairs
     for pattern in patterns:
         for prefix, suffix in compactible_affixes:
+            # Strictly longer than the affixes: a pattern that is *only* its affixes (e.g. "^/$")
+            # would reduce to an empty alternative, so leave it standalone instead.
             if (
                 pattern.startswith(prefix)
                 and pattern.endswith(suffix)
-                and len(pattern) >= len(prefix + suffix)
+                and len(pattern) > len(prefix + suffix)
             ):
                 patterns_grouped_by_affix[(prefix, suffix)].append(
                     pattern[len(prefix) : -len(suffix)]
