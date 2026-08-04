@@ -17,6 +17,7 @@ SizeRestrictions_BODY = [
     r"^/a/([-a-zA-Z0-9_]+)/experiments/source_material/([0-9]+)/$",
     r"^/a/([-a-zA-Z0-9_]+)/experiments/source_material/new/$",
     r"^/a/([-a-zA-Z0-9_]+)/pipelines/data/([0-9]+)/$",
+    r"^/api/(?:v1/)?chat/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/upload/$",
     r"^/channels/commcare_connect/incoming_message$",
     r"^/slack/events$",
     r"^/users/profile/upload\-image/$",

@@ -27,6 +27,8 @@ def _generate_matching_example(pattern):
         )
         .replace(r"([0-9]+)", "42")
         .replace(r"([^/]+)", "XYZ")
+        # Optional literal groups, e.g. the "(?:v1/)?" in the API paths
+        .replace(r"(?:v1/)?", "v1/")
         .replace(r"\.", ".")
         .replace(r"\-", "-")
         .replace(r"^", "")
