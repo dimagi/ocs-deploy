@@ -1,3 +1,4 @@
+import dataclasses
 from functools import cached_property
 
 import aws_cdk as cdk
@@ -14,6 +15,29 @@ from constructs import Construct
 
 from ocs_deploy.config import OCSConfig
 from ocs_deploy.ses_inbound import INBOUND_PREFIX
+
+
+@dataclasses.dataclass(frozen=True)
+class CeleryWorkerSpec:
+    """Identity, queue and capacity for one dedicated Celery worker service."""
+
+    key: str  # used to derive CDK construct ids, task family and container name
+    queue: str  # queue consumed via `-Q`
+    log_group_name: str
+    service_name: str
+    concurrency: int
+    desired_count: int
+    min_capacity: int
+    max_capacity: int
+    autoscale: bool
+    cpu: int = 512
+    memory: int = 2048
+
+    @property
+    def container_name(self):
+        return (
+            f"celery-{self.queue}-worker" if self.queue != "celery" else "celery-worker"
+        )
 
 
 class FargateStack(cdk.Stack):
@@ -110,36 +134,39 @@ class FargateStack(cdk.Stack):
         )
 
         # See https://blog.cloudglance.dev/deep-dive-on-ecs-desired-count-and-circuit-breaker-rollback/index.html
-        celery_max_capacity = 5
-        celery_worker_service = ecs.FargateService(
-            self,
-            config.make_name("CeleryService"),
-            cluster=cluster,
-            desired_count=celery_max_capacity,
-            service_name=config.ecs_celery_service_name,
-            task_definition=self._get_celery_task_definition(
-                ecr_repo, config, is_beat=False
-            ),
-            enable_execute_command=True,
-            circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
-            capacity_provider_strategies=[
-                ecs.CapacityProviderStrategy(
-                    capacity_provider="FARGATE",
-                    weight=1,
+        for spec in self._celery_worker_specs(config):
+            worker_service = ecs.FargateService(
+                self,
+                config.make_name(f"{spec.key}Service"),
+                cluster=cluster,
+                desired_count=spec.desired_count,
+                service_name=spec.service_name,
+                task_definition=self._get_celery_worker_task_definition(
+                    ecr_repo, config, spec
                 ),
-            ],
-        )
+                enable_execute_command=True,
+                circuit_breaker=ecs.DeploymentCircuitBreaker(
+                    enable=True, rollback=True
+                ),
+                capacity_provider_strategies=[
+                    ecs.CapacityProviderStrategy(
+                        capacity_provider="FARGATE",
+                        weight=1,
+                    ),
+                ],
+            )
 
-        celery_scaling = celery_worker_service.auto_scale_task_count(
-            max_capacity=celery_max_capacity,
-            min_capacity=2,
-        )
-        celery_scaling.scale_on_cpu_utilization(
-            config.make_name("CeleryCpuScaling"),
-            target_utilization_percent=50,
-            scale_in_cooldown=cdk.Duration.seconds(120),
-            scale_out_cooldown=cdk.Duration.seconds(120),
-        )
+            if spec.autoscale:
+                worker_scaling = worker_service.auto_scale_task_count(
+                    max_capacity=spec.max_capacity,
+                    min_capacity=spec.min_capacity,
+                )
+                worker_scaling.scale_on_cpu_utilization(
+                    config.make_name(f"{spec.key}CpuScaling"),
+                    target_utilization_percent=50,
+                    scale_in_cooldown=cdk.Duration.seconds(120),
+                    scale_out_cooldown=cdk.Duration.seconds(120),
+                )
 
         ecs.FargateService(
             self,
@@ -147,9 +174,7 @@ class FargateStack(cdk.Stack):
             cluster=cluster,
             desired_count=1,
             service_name=config.ecs_celery_beat_service_name,
-            task_definition=self._get_celery_task_definition(
-                ecr_repo, config, is_beat=True
-            ),
+            task_definition=self._get_celery_beat_task_definition(ecr_repo, config),
             enable_execute_command=True,
             circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
             # we only ever want 1 beat service running
@@ -281,38 +306,85 @@ class FargateStack(cdk.Stack):
             retention=logs.RetentionDays.TWO_YEARS,
         )
 
-    def _get_celery_task_definition(self, ecr_repo, config: OCSConfig, is_beat):
-        if is_beat:
-            log_group_name = config.LOG_GROUP_BEAT
-            name = "CeleryBeatTask"
-            pidfile = "/tmp/celerybeat.pid"
-            command = f"celery -A config beat -l INFO --pidfile {pidfile}".split(" ")
-            container_name = "celery-beat"
-            health_check = ecs.HealthCheck(
-                command=[
-                    "CMD-SHELL",
-                    f"test -f {pidfile}",
-                ],
-                interval=cdk.Duration.seconds(30),
-                timeout=cdk.Duration.seconds(5),
-                retries=4,
-                # startup grace period
-                start_period=cdk.Duration.seconds(60),
-            )
-            cpu = 256
-            memory = 1024
-        else:
-            log_group_name = config.LOG_GROUP_CELERY
-            name = "CeleryWorkerTask"
-            command = (
-                "celery -A config worker -l INFO --pool=threads --concurrency 10".split(
-                    " "
-                )
-            )
-            container_name = "celery-worker"
-            cpu = 512  # 0.5 vCPU
-            memory = 2048
-            health_check = None  # disable for now
+    def _celery_worker_specs(self, config: OCSConfig):
+        """One dedicated Fargate service per Celery queue.
+
+        See the "Split Celery into separate queues" plan: `evaluations` is I/O-bound
+        on LLM calls, so CPU-based autoscaling won't trigger for it -- it runs at a
+        fixed capacity instead until a queue-depth metric exists to scale on.
+        """
+        return [
+            CeleryWorkerSpec(
+                key="Celery",
+                queue="celery",
+                log_group_name=config.LOG_GROUP_CELERY,
+                service_name=config.ecs_celery_service_name,
+                concurrency=10,
+                desired_count=2,
+                min_capacity=1,
+                max_capacity=3,
+                autoscale=True,
+            ),
+            CeleryWorkerSpec(
+                key="CeleryBackground",
+                queue="background",
+                log_group_name=config.LOG_GROUP_CELERY_BACKGROUND,
+                service_name=config.ecs_celery_background_service_name,
+                concurrency=10,
+                desired_count=2,
+                min_capacity=1,
+                max_capacity=3,
+                autoscale=True,
+            ),
+            CeleryWorkerSpec(
+                key="CeleryEvaluations",
+                queue="evaluations",
+                log_group_name=config.LOG_GROUP_CELERY_EVALUATIONS,
+                service_name=config.ecs_celery_evaluations_service_name,
+                concurrency=20,
+                desired_count=2,
+                min_capacity=2,
+                max_capacity=2,
+                autoscale=False,
+            ),
+        ]
+
+    def _get_celery_worker_task_definition(
+        self, ecr_repo, config: OCSConfig, spec: CeleryWorkerSpec
+    ):
+        log_group = self._get_log_group(config.make_name(spec.log_group_name))
+        log_driver = ecs.AwsLogDriver(
+            stream_prefix=config.make_name(), log_group=log_group
+        )
+
+        image = ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest")
+
+        task_id = config.make_name(f"{spec.key}WorkerTask")
+        celery_task = ecs.FargateTaskDefinition(
+            self,
+            id=task_id,
+            cpu=spec.cpu,
+            memory_limit_mib=spec.memory,
+            execution_role=self.execution_role,
+            task_role=self.task_role,
+            family=task_id,
+        )
+
+        command = (
+            "celery -A config worker -l INFO --pool=threads "
+            f"--concurrency {spec.concurrency} -Q {spec.queue}"
+        ).split(" ")
+
+        celery_task.add_container(
+            id=spec.container_name,
+            image=image,
+            container_name=spec.container_name,
+            essential=True,
+            environment=self.celery_env,
+            secrets=self.secrets_dict,
+            logging=log_driver,
+            command=command,
+            health_check=None,  # disable for now
             # health_check = ecs.HealthCheck(
             #     command=[
             #         "CMD-SHELL",
@@ -322,40 +394,59 @@ class FargateStack(cdk.Stack):
             #     timeout=cdk.Duration.seconds(5),
             #     retries=4,
             # )
-
-        log_group = self._get_log_group(config.make_name(log_group_name))
-        log_driver = ecs.AwsLogDriver(
-            stream_prefix=config.make_name(), log_group=log_group
-        )
-
-        image = ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest")
-
-        celery_task = ecs.FargateTaskDefinition(
-            self,
-            id=config.make_name(name),
-            cpu=cpu,
-            memory_limit_mib=memory,
-            execution_role=self.execution_role,
-            task_role=self.task_role,
-            family=config.make_name(name),
-        )
-
-        celery_task.add_container(
-            id=container_name,
-            image=image,
-            container_name=container_name,
-            essential=True,
-            environment=self.celery_env,
-            secrets=self.secrets_dict,
-            logging=log_driver,
-            command=command,
-            health_check=health_check,
             # Give workers the full window ECS allows (default is 30s) to
             # finish in-flight jobs after SIGTERM before they are SIGKILLed.
             stop_timeout=cdk.Duration.seconds(120),
         )
 
         return celery_task
+
+    def _get_celery_beat_task_definition(self, ecr_repo, config: OCSConfig):
+        log_group = self._get_log_group(config.make_name(config.LOG_GROUP_BEAT))
+        log_driver = ecs.AwsLogDriver(
+            stream_prefix=config.make_name(), log_group=log_group
+        )
+
+        image = ecs.ContainerImage.from_ecr_repository(ecr_repo, tag="latest")
+
+        task_id = config.make_name("CeleryBeatTask")
+        pidfile = "/tmp/celerybeat.pid"
+        beat_task = ecs.FargateTaskDefinition(
+            self,
+            id=task_id,
+            cpu=256,
+            memory_limit_mib=1024,
+            execution_role=self.execution_role,
+            task_role=self.task_role,
+            family=task_id,
+        )
+
+        beat_task.add_container(
+            id="celery-beat",
+            image=image,
+            container_name="celery-beat",
+            essential=True,
+            environment=self.celery_env,
+            secrets=self.secrets_dict,
+            logging=log_driver,
+            command=f"celery -A config beat -l INFO --pidfile {pidfile}".split(" "),
+            health_check=ecs.HealthCheck(
+                command=[
+                    "CMD-SHELL",
+                    f"test -f {pidfile}",
+                ],
+                interval=cdk.Duration.seconds(30),
+                timeout=cdk.Duration.seconds(5),
+                retries=4,
+                # startup grace period
+                start_period=cdk.Duration.seconds(60),
+            ),
+            # Give workers the full window ECS allows (default is 30s) to
+            # finish in-flight jobs after SIGTERM before they are SIGKILLed.
+            stop_timeout=cdk.Duration.seconds(120),
+        )
+
+        return beat_task
 
     @cached_property
     def secrets_dict(self):
