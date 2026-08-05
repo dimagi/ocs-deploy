@@ -105,5 +105,5 @@ def test_anymail_webhook_secret_in_task_definition(ocs_config):
             }
         ),
     )
-    # web + celery worker + celery beat + migration = 4 task defs include this secret.
-    assert len(matches) == 4
+    # web + celery + background + evaluations workers + celery beat + migration = 6 task defs include this secret.
+    assert len(matches) == 6
