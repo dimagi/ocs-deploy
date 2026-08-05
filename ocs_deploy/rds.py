@@ -70,8 +70,8 @@ class RdsStack(cdk.Stack):
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.T4G, ec2.InstanceSize.MEDIUM
             ),
-            allocated_storage=20,
-            max_allocated_storage=100,
+            allocated_storage=config.rds_allocated_storage,
+            max_allocated_storage=config.rds_max_allocated_storage,
             storage_encrypted=True,
             credentials=rds.Credentials.from_generated_secret(
                 database_username,
@@ -97,6 +97,12 @@ class RdsStack(cdk.Stack):
             parameters={
                 "autovacuum": "on",
                 "client_encoding": "UTF8",
+                # Most of the volume is TOAST from JSON columns (trace
+                # snapshots, evaluation payloads). lz4 compresses those better
+                # and far faster than the pglz default. Only applies to rows
+                # written after the change; existing TOAST stays pglz until
+                # rewritten.
+                "default_toast_compression": "lz4",
             },
         )
         self.db_instance.grant_connect(rds_role, database_username)

@@ -89,6 +89,23 @@ def test_ecs_no_running_tasks_alarm_uses_container_insights(ocs_config):
     )
 
 
+def test_free_storage_alarm_scales_with_allocated_storage(ocs_config_factory):
+    """The threshold tracks allocated storage rather than a fixed byte count,
+    so it stays above the 10% mark where RDS autoscaling kicks in."""
+    config = ocs_config_factory(RDS_ALLOCATED_STORAGE="40")
+    template = _synth_monitoring(config)
+    template.has_resource_properties(
+        "AWS::CloudWatch::Alarm",
+        assertions.Match.object_like(
+            {
+                "MetricName": "FreeStorageSpace",
+                "ComparisonOperator": "LessThanThreshold",
+                "Threshold": int(0.15 * 40 * 1024**3),
+            }
+        ),
+    )
+
+
 def test_redis_alarms_use_cache_cluster_id_dimension(ocs_config):
     template = _synth_monitoring(ocs_config)
     template.has_resource_properties(

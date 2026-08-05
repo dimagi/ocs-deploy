@@ -194,13 +194,23 @@ class MonitoringStack(cdk.Stack):
             alarm_description="RDS CPU utilization is sustained above 85%.",
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
         )
+        # RDS autoscaling grows the volume once free space drops below 10% of
+        # the allocated size, so alarm slightly above that: it warns while
+        # autoscaling still has room, and stays useful once the volume reaches
+        # the cap and autoscaling can no longer help. A fixed byte threshold
+        # can't do this — on a 20 GiB volume, "below 10 GiB free" is just
+        # "over half full".
+        free_storage_threshold = int(0.15 * config.rds_allocated_storage * 1024**3)
         self._alarm(
             "RdsFreeStorageAlarm",
             db.metric_free_storage_space(period=cdk.Duration.minutes(5)),
-            threshold=10 * 1024**3,  # 10 GiB, well before the 100 GiB autoscaling cap
+            threshold=free_storage_threshold,
             evaluation_periods=3,
             comparison=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-            alarm_description="RDS free storage is below 10 GiB.",
+            alarm_description=(
+                f"RDS free storage is below 15% of the "
+                f"{config.rds_allocated_storage} GiB allocated volume."
+            ),
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
         )
         self._alarm(

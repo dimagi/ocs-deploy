@@ -84,6 +84,17 @@ class OCSConfig:
             "MAINTENANCE_WINDOW", "Mon:00:00-Mon:03:00"
         )
 
+        # RDS storage autoscales between these two values. Keep
+        # RDS_ALLOCATED_STORAGE in step with the volume's real size after an
+        # autoscaling event, otherwise the free-storage alarm threshold (a
+        # percentage of this value) drifts from the actual volume.
+        self.rds_allocated_storage = int(
+            self._config.get("RDS_ALLOCATED_STORAGE") or 20
+        )
+        self.rds_max_allocated_storage = int(
+            self._config.get("RDS_MAX_ALLOCATED_STORAGE") or 100
+        )
+
         self.github_repo = self._config.get("GITHUB_REPO", "dimagi/open-chat-studio")
         self.allowed_hosts = self._config["DJANGO_ALLOWED_HOSTS"]
 
