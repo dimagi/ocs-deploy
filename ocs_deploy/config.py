@@ -47,6 +47,8 @@ class OCSConfig:
     LOG_GROUP_DJANGO = "DjangoLogs"
     LOG_GROUP_DJANGO_MIGRATIONS = "DjangoMigrationLogs"
     LOG_GROUP_CELERY = "CeleryWorkerLogs"
+    LOG_GROUP_CELERY_BACKGROUND = "CeleryBackgroundWorkerLogs"
+    LOG_GROUP_CELERY_EVALUATIONS = "CeleryEvaluationsWorkerLogs"
     LOG_GROUP_BEAT = "CeleryBeatLogs"
 
     CONTAINER_PORT = 8000
@@ -141,6 +143,14 @@ class OCSConfig:
     @property
     def ecs_celery_service_name(self):
         return self.make_name("Celery")
+
+    @property
+    def ecs_celery_background_service_name(self):
+        return self.make_name("CeleryBackground")
+
+    @property
+    def ecs_celery_evaluations_service_name(self):
+        return self.make_name("CeleryEvaluations")
 
     @property
     def ecs_celery_beat_service_name(self):
