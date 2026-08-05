@@ -8,6 +8,7 @@ from ocs_deploy.ec2_tmp import Ec2TmpStack
 from ocs_deploy.ecr import EcrStack
 from ocs_deploy.fargate import FargateStack
 from ocs_deploy.github import GithubOidcStack
+from ocs_deploy.monitoring import MonitoringStack
 from ocs_deploy.rds import RdsStack
 from ocs_deploy.redis import RedisStack
 from ocs_deploy.s3 import S3Stack
@@ -49,6 +50,14 @@ ocs_services = FargateStack(
 )
 waf_stack = WAFStack(app, config, ocs_services.load_balancer_arn)
 waf_stack.add_dependency(ocs_services)
+
+monitoring_stack = MonitoringStack(
+    app, ocs_services, rds_stack, redis_stack, waf_stack, config
+)
+monitoring_stack.add_dependency(ocs_services)
+monitoring_stack.add_dependency(rds_stack)
+monitoring_stack.add_dependency(redis_stack)
+monitoring_stack.add_dependency(waf_stack)
 
 # these aren't deployed to prod yet
 # guardduty_stack = GuardDutyStack(app, config)
