@@ -139,8 +139,8 @@ class MonitoringStack(cdk.Stack):
     def _create_ecs_alarms(self, fargate_stack, config: OCSConfig) -> None:
         services = {
             "DjangoWeb": fargate_stack.fargate_service.service,
-            "CeleryWorker": fargate_stack.celery_worker_service,
             "CeleryBeat": fargate_stack.celery_beat_service,
+            **fargate_stack.celery_worker_services,
         }
         for name, service in services.items():
             self._alarm(
