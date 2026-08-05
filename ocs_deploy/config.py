@@ -24,6 +24,7 @@ class OCSConfig:
     GUARD_DUTY_STACK = "guardduty"
     SECURITYHUB_STACK = "securityhub"
     DETECTIVE_STACK = "detective"
+    MONITORING_STACK = "monitoring"
 
     ALL_STACKS = [
         GITHUB_STACK,
@@ -40,6 +41,7 @@ class OCSConfig:
         GUARD_DUTY_STACK,
         SECURITYHUB_STACK,
         DETECTIVE_STACK,
+        MONITORING_STACK,
     ]
 
     LOG_GROUP_DJANGO = "DjangoLogs"
@@ -190,6 +192,17 @@ class OCSConfig:
     @property
     def anymail_webhook_secret_name(self):
         return self.make_secret_name("anymail-webhook-secret")
+
+    @property
+    def slack_workspace_id(self):
+        """AWS Chatbot Slack workspace ID, set after authorizing the workspace
+        in the AWS Chatbot console (Chatbot > Configure new client > Slack)."""
+        return self._config.get("SLACK_WORKSPACE_ID")
+
+    @property
+    def slack_alerts_channel_id(self):
+        """Slack channel ID (not name) that CloudWatch alarms are posted to."""
+        return self._config.get("SLACK_ALERTS_CHANNEL_ID")
 
     def get_celery_env(self, rds_host, rds_port):
         return self._get_common_env(
