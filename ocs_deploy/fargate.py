@@ -109,6 +109,8 @@ class FargateStack(cdk.Stack):
             value=django_web_service.load_balancer.load_balancer_dns_name,
         )
 
+        self.cluster = cluster
+
         # See https://blog.cloudglance.dev/deep-dive-on-ecs-desired-count-and-circuit-breaker-rollback/index.html
         celery_max_capacity = 5
         celery_worker_service = ecs.FargateService(
@@ -140,8 +142,9 @@ class FargateStack(cdk.Stack):
             scale_in_cooldown=cdk.Duration.seconds(120),
             scale_out_cooldown=cdk.Duration.seconds(120),
         )
+        self.celery_worker_service = celery_worker_service
 
-        ecs.FargateService(
+        self.celery_beat_service = ecs.FargateService(
             self,
             config.make_name("CeleryBeatService"),
             cluster=cluster,
