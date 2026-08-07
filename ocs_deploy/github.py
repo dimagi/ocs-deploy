@@ -108,9 +108,8 @@ class GithubOidcStack(cdk.Stack):
                     "ecs:DescribeServices",
                 ],
                 resources=[
-                    f"{service_prefix}/{config.ecs_django_service_name}",
-                    f"{service_prefix}/{config.ecs_celery_service_name}",
-                    f"{service_prefix}/{config.ecs_celery_beat_service_name}",
+                    f"{service_prefix}/{service_name}"
+                    for service_name, _ in config.ecs_services.values()
                 ],
                 effect=iam.Effect.ALLOW,
             )

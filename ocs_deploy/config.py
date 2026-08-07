@@ -168,6 +168,28 @@ class OCSConfig:
         return self.make_name("CeleryBeat")
 
     @property
+    def ecs_services(self):
+        """Canonical CLI key -> (service name, container name) for every ECS service.
+
+        Anything that enumerates services -- the deploy role's IAM policy, the
+        `--services` CLI flag, the GitHub deploy workflow -- derives from this so
+        adding a service can't leave one of them silently behind.
+        """
+        return {
+            "django": (self.ecs_django_service_name, "web"),
+            "celery": (self.ecs_celery_service_name, "celery-worker"),
+            "celery-background": (
+                self.ecs_celery_background_service_name,
+                "celery-background-worker",
+            ),
+            "celery-evaluations": (
+                self.ecs_celery_evaluations_service_name,
+                "celery-evaluations-worker",
+            ),
+            "beat": (self.ecs_celery_beat_service_name, "celery-beat"),
+        }
+
+    @property
     def ecr_repo_name(self):
         return self.make_name("ecr-repo")
 
