@@ -20,7 +20,10 @@ from ocs_deploy.cli.tasks_utils import confirm
 
 
 STACKS_HELP = f"Comma-separated list of the stacks to deploy ({' | '.join(OCSConfig.ALL_STACKS)}). Defaults to ALL."
-SERVICES_HELP = "Services to target [ALL, django, celery, beat]. Separate multiple with a comma. Defaults to 'ALL'"
+SERVICES_HELP = (
+    "Services to target [ALL, django, celery, celery-background, celery-evaluations, "
+    "beat]. Separate multiple with a comma. Defaults to 'ALL'"
+)
 
 
 @task(
@@ -304,7 +307,7 @@ def maintenance(c: Context, enable, services="ALL", profile=DEFAULT_PROFILE):
 def _update_services(
     c: Context, config, services, profile, action, force=True, extra_args=None
 ):
-    services = _get_services(services)
+    services = _get_services(config, services)
 
     confirm(
         f"This will {action} the following services: {', '.join(services)}. Continue ?",
@@ -358,12 +361,10 @@ def list_stacks(c: Context, profile=DEFAULT_PROFILE):
     _run_cdk(c, "list", profile=profile)
 
 
-def _get_services(services):
+def _get_services(config, services):
     if services == "ALL":
-        services = ["django", "celery", "beat"]
-    else:
-        services = [s.strip() for s in services.split(",")]
-    return services
+        return list(config.ecs_services)
+    return [s.strip() for s in services.split(",")]
 
 
 def _run_cdk_stack_command(

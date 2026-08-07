@@ -322,16 +322,8 @@ def _extract_between(text, start, end):
 
 
 def _get_service_and_container(config, service):
-    match service:
-        case "django":
-            service = config.make_name("Django")
-            container = "web"
-        case "celery":
-            service = config.make_name("Celery")
-            container = "celery-worker"
-        case "beat":
-            service = config.make_name("CeleryBeat")
-            container = "celery-beat"
-        case _:
-            raise Exit(f"Unknown service '{service}'", -1)
-    return service, container
+    try:
+        return config.ecs_services[service]
+    except KeyError:
+        known = ", ".join(config.ecs_services)
+        raise Exit(f"Unknown service '{service}'. One of: {known}", -1) from None
