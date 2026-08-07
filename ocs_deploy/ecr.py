@@ -21,13 +21,19 @@ class EcrStack(cdk.Stack):
             repository_name=config.ecr_repo_name,
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
+        # ECS resolves the `latest` tag to a digest when a deployment starts and
+        # pins it for the life of that deployment, so every later task launch
+        # (autoscale-out, task replacement) pulls that exact digest. Pushing a
+        # new image untags the old one, so these rules must keep it around long
+        # enough for services that haven't redeployed since -- otherwise those
+        # launches fail with CannotPullContainerError.
         ecr_repo.add_lifecycle_rule(
-            max_image_age=cdk.Duration.days(7),
+            max_image_age=cdk.Duration.days(30),
             rule_priority=1,
             tag_status=ecr.TagStatus.UNTAGGED,
         )
         ecr_repo.add_lifecycle_rule(
-            max_image_count=4, rule_priority=2, tag_status=ecr.TagStatus.ANY
+            max_image_count=20, rule_priority=2, tag_status=ecr.TagStatus.ANY
         )
 
         cdk.CfnOutput(
