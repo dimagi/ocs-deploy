@@ -1,3 +1,4 @@
+import difflib
 import os
 import shlex
 from pathlib import Path
@@ -57,6 +58,39 @@ def _item_exists(c: Context, title: str, vault: str):
     return result.ok
 
 
+def _get_document(c: Context, title: str, vault: str):
+    result = c.run(
+        f"op document get {shlex.quote(title)} --vault {shlex.quote(vault)}",
+        hide=True,
+    )
+    return result.stdout
+
+
+def _print_diff(remote: str, local: str, title: str, path: Path):
+    diff = list(
+        difflib.unified_diff(
+            remote.splitlines(),
+            local.splitlines(),
+            fromfile=f"1Password: {title}",
+            tofile=f"local: {path}",
+            lineterm="",
+        )
+    )
+    if not diff:
+        return False
+
+    for line in diff:
+        if line.startswith("+"):
+            cprint(line, color="green")
+        elif line.startswith("-"):
+            cprint(line, color="red")
+        elif line.startswith("@@"):
+            cprint(line, color="cyan")
+        else:
+            print(line)
+    return True
+
+
 @task(help=VAULT_HELP)
 def pull(c: Context, vault=None):
     """Download the .env.<env> file from 1Password."""
@@ -101,6 +135,12 @@ def push(c: Context, vault=None):
     quoted_vault = shlex.quote(vault)
 
     if _item_exists(c, title, vault):
+        remote = _get_document(c, title, vault)
+        if not _print_diff(remote, path.read_text(), title, path):
+            cprint(
+                f"'{title}' in vault '{vault}' is already up to date.", color="green"
+            )
+            return
         confirm(f"This will overwrite '{title}' in vault '{vault}'. Continue?")
         c.run(
             f"op document edit {quoted_title} {quoted_path} --vault {quoted_vault}",
