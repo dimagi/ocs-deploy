@@ -70,6 +70,27 @@ def run_script(c: Context, script, service="django", profile=DEFAULT_PROFILE):
     _fargate_connect(c, config, command, service, profile)
 
 
+@task(
+    help={
+        "file": "Path to a local file to copy remotely.",
+        "service": "Service to run the script on. One of [django, celery, beat]. Defaults to 'django'.",
+        **PROFILE_HELP,
+    },
+    auto_shortflags=False,
+)
+def push_file(c: Context, file, service="django", profile=DEFAULT_PROFILE):
+    """Copy a local file to the remote Django environment."""
+    path = Path(file)
+    if not path.is_file():
+        raise Exit(f"File not found: {file}", -1)
+
+    config = _get_config(c)
+    profile = get_profile_and_auth(c, profile)
+    encoded = base64.b64encode(path.read_bytes()).decode()
+    command = f"bash -c 'echo {encoded} | base64 -d > {path.name}'"
+    _fargate_connect(c, config, command, service, profile)
+
+
 def _shell(c: Context, profile=DEFAULT_PROFILE, mgmt_command="shell"):
     config = _get_config(c)
     profile = get_profile_and_auth(c, profile)
