@@ -256,7 +256,14 @@ class OCSConfig:
         )
 
     def get_django_env(self, rds_host, rds_port):
-        return self._get_common_env(rds_host, rds_port)
+        return self._get_common_env(
+            rds_host,
+            rds_port,
+            # requests reach Django via the load balancer only
+            RATE_LIMIT_TRUSTED_PROXY_COUNT=self._config.get(
+                "RATE_LIMIT_TRUSTED_PROXY_COUNT", "1"
+            ),
+        )
 
     def _get_common_env(self, rds_host, rds_port, **extra):
         env_dict = {
