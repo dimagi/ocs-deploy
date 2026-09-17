@@ -379,31 +379,36 @@ class FargateStack(cdk.Stack):
             f"--concurrency {spec.concurrency} -Q {spec.queue}"
         ).split(" ")
 
+        # Without a health check ECS counts a task as healthy the moment the container
+        # starts, so a rolling deploy drains the old worker while the new one is still
+        # importing the app and has not registered its queue consumers. The queues
+        # running a single task then have no consumer for the length of a cold start.
+        #
+        # The worker touches this file from `worker_ready` and removes it on shutdown,
+        # so the check is a stat rather than the second full app import that
+        # `celery inspect ping` costs -- too slow to fit a health check timeout on
+        # the CPU these tasks have, and liable to time out on a busy worker and take
+        # a working task down with it.
+        ready_file = "/tmp/celery-ready"
+
         celery_task.add_container(
             id=spec.container_name,
             image=image,
             container_name=spec.container_name,
             essential=True,
-            environment=self.celery_env,
+            environment=self.celery_env | {"CELERY_READY_FILE": ready_file},
             secrets=self.secrets_dict,
             logging=log_driver,
             command=command,
-            # Without this, ECS counts a task as healthy the moment the container
-            # starts, so a rolling deploy drains the old worker while the new one
-            # is still importing Django and has not registered its queue
-            # consumers yet. The queues with min_capacity=1 then have no consumer
-            # at all for the length of a cold start, which the /status/ endpoint
-            # reports as "No worker for Celery queue".
             health_check=ecs.HealthCheck(
-                command=[
-                    "CMD-SHELL",
-                    "celery -A config inspect ping --destination celery@$HOSTNAME --timeout 5",
-                ],
-                interval=cdk.Duration.seconds(30),
-                timeout=cdk.Duration.seconds(10),
+                command=["CMD-SHELL", f"test -f {ready_file}"],
+                interval=cdk.Duration.seconds(15),
+                timeout=cdk.Duration.seconds(5),
                 retries=4,
-                # Cover image pull plus Django boot before failures count.
-                start_period=cdk.Duration.seconds(120),
+                # A worker takes over a minute to boot on a developer machine and
+                # longer on half a vCPU, so forgive failures well past that. The task
+                # still goes healthy within one interval of the worker being ready.
+                start_period=cdk.Duration.seconds(300),
             ),
             # Give workers the full window ECS allows (default is 30s) to
             # finish in-flight jobs after SIGTERM before they are SIGKILLed.
