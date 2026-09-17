@@ -107,3 +107,31 @@ def test_anymail_webhook_secret_in_task_definition(ocs_config):
     )
     # web + celery + background + evaluations workers + celery beat + migration = 6 task defs include this secret.
     assert len(matches) == 6
+
+
+def test_celery_workers_gate_health_on_the_readiness_file(ocs_config):
+    """A worker's health check must not import the app.
+
+    `celery inspect ping` needs a second full app import, which does not fit a health check
+    timeout on the CPU these tasks have: every check failed, no task ever went healthy and the
+    deployment circuit breaker tripped. The worker writes CELERY_READY_FILE instead, so the
+    check is a stat.
+    """
+    template = _synth_fargate(ocs_config)
+    worker_containers = [
+        container
+        for task_def in template.find_resources("AWS::ECS::TaskDefinition").values()
+        for container in task_def["Properties"]["ContainerDefinitions"]
+        if container["Name"].startswith("celery-")
+        and container["Name"].endswith("-worker")
+    ]
+
+    assert len(worker_containers) == 3
+    for container in worker_containers:
+        ready_file = dict(
+            (entry["Name"], entry["Value"]) for entry in container["Environment"]
+        )["CELERY_READY_FILE"]
+        assert container["HealthCheck"]["Command"] == [
+            "CMD-SHELL",
+            f"test -f {ready_file}",
+        ]

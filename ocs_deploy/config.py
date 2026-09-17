@@ -301,6 +301,9 @@ class OCSConfig:
             "DJANGO_SERVER_EMAIL",
             "DJANGO_DEFAULT_FROM_EMAIL",
             "TEAM_METADATA_FIELDS",
+            "OCS_LANGFUSE_PUBLIC_KEY",
+            "OCS_LANGFUSE_HOST",
+            "OCS_LANGFUSE_SAMPLE_RATE",
         ]
         for key in optional:
             if value := self._config.get(key):
