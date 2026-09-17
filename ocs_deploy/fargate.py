@@ -388,16 +388,23 @@ class FargateStack(cdk.Stack):
             secrets=self.secrets_dict,
             logging=log_driver,
             command=command,
-            health_check=None,  # disable for now
-            # health_check = ecs.HealthCheck(
-            #     command=[
-            #         "CMD-SHELL",
-            #         "celery -A config inspect ping --destination celery@$HOSTNAME",
-            #     ],
-            #     interval=cdk.Duration.seconds(30),
-            #     timeout=cdk.Duration.seconds(5),
-            #     retries=4,
-            # )
+            # Without this, ECS counts a task as healthy the moment the container
+            # starts, so a rolling deploy drains the old worker while the new one
+            # is still importing Django and has not registered its queue
+            # consumers yet. The queues with min_capacity=1 then have no consumer
+            # at all for the length of a cold start, which the /status/ endpoint
+            # reports as "No worker for Celery queue".
+            health_check=ecs.HealthCheck(
+                command=[
+                    "CMD-SHELL",
+                    "celery -A config inspect ping --destination celery@$HOSTNAME --timeout 5",
+                ],
+                interval=cdk.Duration.seconds(30),
+                timeout=cdk.Duration.seconds(10),
+                retries=4,
+                # Cover image pull plus Django boot before failures count.
+                start_period=cdk.Duration.seconds(120),
+            ),
             # Give workers the full window ECS allows (default is 30s) to
             # finish in-flight jobs after SIGTERM before they are SIGKILLed.
             stop_timeout=cdk.Duration.seconds(120),
