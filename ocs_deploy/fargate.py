@@ -16,6 +16,9 @@ from constructs import Construct
 from ocs_deploy.config import OCSConfig
 from ocs_deploy.ses_inbound import INBOUND_PREFIX
 
+# Explicit value (CDK's default) so the minHealthyPercent annotation is acknowledged.
+MIN_HEALTHY_PERCENT = 50
+
 
 @dataclasses.dataclass(frozen=True)
 class CeleryWorkerSpec:
@@ -90,7 +93,7 @@ class FargateStack(cdk.Stack):
             self,
             config.make_name("DeploymentCluster"),
             vpc=vpc,
-            container_insights=True,
+            container_insights_v2=ecs.ContainerInsights.ENABLED,
             cluster_name=config.ecs_cluster_name,
             enable_fargate_capacity_providers=True,
         )
@@ -112,6 +115,7 @@ class FargateStack(cdk.Stack):
             task_definition=self._get_web_task_definition(ecr_repo, config),
             enable_execute_command=True,
             circuit_breaker=ecs.DeploymentCircuitBreaker(enable=True, rollback=True),
+            min_healthy_percent=MIN_HEALTHY_PERCENT,
         )
 
         # Setup AutoScaling policy
@@ -151,6 +155,7 @@ class FargateStack(cdk.Stack):
                 circuit_breaker=ecs.DeploymentCircuitBreaker(
                     enable=True, rollback=True
                 ),
+                min_healthy_percent=MIN_HEALTHY_PERCENT,
                 capacity_provider_strategies=[
                     ecs.CapacityProviderStrategy(
                         capacity_provider="FARGATE",
