@@ -284,7 +284,7 @@ class OCSConfig:
             "WHATSAPP_S3_AUDIO_BUCKET": self.s3_whatsapp_audio_bucket,
             "SENTRY_ENVIRONMENT": self._config.get("SENTRY_ENVIRONMENT", "development"),
             "SENTRY_TRACES_SAMPLE_RATE": self._config.get(
-                "SENTRY_TRACES_SAMPLE_RATE", "0.5"
+                "SENTRY_TRACES_SAMPLE_RATE", "0"
             ),
             "DJANGO_ALLOWED_HOSTS": self.allowed_hosts,
             "EMAIL_CHANNEL_ALLOWED_DOMAINS": ",".join(self.all_inbound_domains),
