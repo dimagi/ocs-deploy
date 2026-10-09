@@ -95,7 +95,7 @@ class MonitoringStack(cdk.Stack):
 
         self._alarm(
             "AlbTarget5xxAlarm",
-            target_group.metric_http_code_target(
+            target_group.metrics.http_code_target(
                 elb.HttpCodeTarget.TARGET_5XX_COUNT, period=cdk.Duration.minutes(5)
             ),
             threshold=10,
@@ -106,7 +106,7 @@ class MonitoringStack(cdk.Stack):
         )
         self._alarm(
             "AlbResponseTimeAlarm",
-            target_group.metric_target_response_time(
+            target_group.metrics.target_response_time(
                 statistic="p99", period=cdk.Duration.minutes(5)
             ),
             threshold=5,
@@ -117,7 +117,7 @@ class MonitoringStack(cdk.Stack):
         )
         self._alarm(
             "AlbUnhealthyHostsAlarm",
-            target_group.metric_unhealthy_host_count(period=cdk.Duration.minutes(1)),
+            target_group.metrics.unhealthy_host_count(period=cdk.Duration.minutes(1)),
             threshold=0,
             evaluation_periods=3,
             comparison=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
@@ -126,7 +126,7 @@ class MonitoringStack(cdk.Stack):
         )
         self._alarm(
             "AlbRejectedConnectionsAlarm",
-            load_balancer.metric_rejected_connection_count(
+            load_balancer.metrics.rejected_connection_count(
                 period=cdk.Duration.minutes(5)
             ),
             threshold=0,
