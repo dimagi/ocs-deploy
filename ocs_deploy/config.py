@@ -255,7 +255,7 @@ class OCSConfig:
         )
 
     def get_django_env(self, rds_host, rds_port):
-        return self._get_common_env(
+        env = self._get_common_env(
             rds_host,
             rds_port,
             # requests reach Django via the load balancer only
@@ -263,6 +263,9 @@ class OCSConfig:
                 "RATE_LIMIT_TRUSTED_PROXY_COUNT", "1"
             ),
         )
+        if value := self._config.get("SENTRY_BROWSER_LOADER_KEY"):
+            env["SENTRY_BROWSER_LOADER_KEY"] = value
+        return env
 
     def _get_common_env(self, rds_host, rds_port, **extra):
         env_dict = {
