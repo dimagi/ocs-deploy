@@ -194,25 +194,29 @@ class MonitoringStack(cdk.Stack):
             alarm_description="RDS CPU utilization is sustained above 85%.",
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
         )
-        # RDS autoscaling grows the volume once free space drops below 10% of
-        # the allocated size, so alarm slightly above that: it warns while
-        # autoscaling still has room, and stays useful once the volume reaches
-        # the cap and autoscaling can no longer help. A fixed byte threshold
-        # can't do this — on a 20 GiB volume, "below 10 GiB free" is just
-        # "over half full".
-        free_storage_threshold = int(0.15 * config.rds_allocated_storage * 1024**3)
-        self._alarm(
-            "RdsFreeStorageAlarm",
-            db.metric_free_storage_space(period=cdk.Duration.minutes(5)),
-            threshold=free_storage_threshold,
-            evaluation_periods=3,
-            comparison=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-            alarm_description=(
-                f"RDS free storage is below 15% of the "
-                f"{config.rds_allocated_storage} GiB allocated volume."
-            ),
-            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
-        )
+        # Don't rely on RDS autoscaling to grow the volume at 10% free: in
+        # practice it has left free space below 10% for weeks and only grown
+        # the volume once it was nearly full. The 15% alarm is an early
+        # warning; the 5% alarm means the disk could fill before autoscaling
+        # acts, so add storage manually. Percentages rather than fixed byte
+        # counts: on a 20 GiB volume, "below 10 GiB free" is just "over half
+        # full".
+        for alarm_id, percent in (
+            ("RdsFreeStorageAlarm", 15),
+            ("RdsFreeStorageCriticalAlarm", 5),
+        ):
+            self._alarm(
+                alarm_id,
+                db.metric_free_storage_space(period=cdk.Duration.minutes(5)),
+                threshold=int(percent / 100 * config.rds_allocated_storage * 1024**3),
+                evaluation_periods=3,
+                comparison=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+                alarm_description=(
+                    f"RDS free storage is below {percent}% of the "
+                    f"{config.rds_allocated_storage} GiB allocated volume."
+                ),
+                treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            )
         self._alarm(
             "RdsFreeableMemoryAlarm",
             db.metric_freeable_memory(period=cdk.Duration.minutes(5)),
