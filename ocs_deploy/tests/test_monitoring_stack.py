@@ -104,6 +104,16 @@ def test_free_storage_alarm_scales_with_allocated_storage(ocs_config_factory):
             }
         ),
     )
+    template.has_resource_properties(
+        "AWS::CloudWatch::Alarm",
+        assertions.Match.object_like(
+            {
+                "MetricName": "FreeStorageSpace",
+                "ComparisonOperator": "LessThanThreshold",
+                "Threshold": int(0.05 * 40 * 1024**3),
+            }
+        ),
+    )
 
 
 def test_redis_alarms_use_cache_cluster_id_dimension(ocs_config):
