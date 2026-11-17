@@ -194,12 +194,13 @@ class MonitoringStack(cdk.Stack):
             alarm_description="RDS CPU utilization is sustained above 85%.",
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
         )
-        # RDS autoscaling grows the volume once free space drops below 10% of
-        # the allocated size. The 15% alarm warns while autoscaling still has
-        # room; the 5% alarm only fires once autoscaling can no longer help
-        # (volume at the cap, or growth outpacing the 6-hour cooldown between
-        # autoscaling events). Percentages rather than fixed byte counts: on a
-        # 20 GiB volume, "below 10 GiB free" is just "over half full".
+        # Don't rely on RDS autoscaling to grow the volume at 10% free: in
+        # practice it has left free space below 10% for weeks and only grown
+        # the volume once it was nearly full. The 15% alarm is an early
+        # warning; the 5% alarm means the disk could fill before autoscaling
+        # acts, so add storage manually. Percentages rather than fixed byte
+        # counts: on a 20 GiB volume, "below 10 GiB free" is just "over half
+        # full".
         for alarm_id, percent in (
             ("RdsFreeStorageAlarm", 15),
             ("RdsFreeStorageCriticalAlarm", 5),
