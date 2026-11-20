@@ -262,6 +262,7 @@ class OCSConfig:
             RATE_LIMIT_TRUSTED_PROXY_COUNT=self._config.get(
                 "RATE_LIMIT_TRUSTED_PROXY_COUNT", "1"
             ),
+            RATE_LIMIT_ENFORCE=self._config.get("RATE_LIMIT_ENFORCE", "True"),
         )
         if value := self._config.get("SENTRY_BROWSER_LOADER_KEY"):
             env["SENTRY_BROWSER_LOADER_KEY"] = value
