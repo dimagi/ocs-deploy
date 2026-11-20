@@ -4,6 +4,7 @@ from aws_cdk import (
     aws_cloudwatch as cloudwatch,
     aws_cloudwatch_actions as cw_actions,
     aws_elasticloadbalancingv2 as elb,
+    aws_logs as logs,
     aws_sns as sns,
 )
 from constructs import Construct
@@ -13,7 +14,8 @@ from ocs_deploy.config import OCSConfig
 
 class MonitoringStack(cdk.Stack):
     """CloudWatch alarms for the app's ALB, ECS services, RDS, Redis and WAF,
-    published to Slack via an SNS topic and AWS Chatbot."""
+    published to Slack via an SNS topic and AWS Chatbot, plus metrics and a
+    dashboard built from the app's rate-limit log lines."""
 
     def __init__(
         self,
@@ -35,6 +37,7 @@ class MonitoringStack(cdk.Stack):
         self._create_rds_alarms(rds_stack, config)
         self._create_redis_alarms(redis_stack, config)
         self._create_waf_alarms(waf_stack, config)
+        self._create_rate_limit_monitoring(config)
 
     def _create_alarm_topic(self, config: OCSConfig) -> sns.Topic:
         topic = sns.Topic(
@@ -299,4 +302,180 @@ class MonitoringStack(cdk.Stack):
             comparison=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
             alarm_description="WAF is blocking an unusually high rate of requests.",
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+
+    def _create_rate_limit_monitoring(self, config: OCSConfig) -> None:
+        """Metrics, alarms, a dashboard and a saved query from the rate limiter's
+        JSON log lines (`apps/utils/rate_limit.py` in open-chat-studio).
+
+        Every caller of the limiter runs in the web service, so only the Django
+        log group is watched. The group is looked up by name rather than passed
+        from the Fargate stack so it doesn't add a cross-stack export.
+
+        `would_block` and `blocked` are sampled by the app (the first crossing
+        per identity per window, then every 100th request), so these metrics
+        count log lines, not requests: read them as "an identity went over its
+        limit", not as request volume. Per-identity detail (`key_hash`,
+        `team_id`) stays in Logs Insights; making it a dimension would create a
+        billed custom metric per identity.
+        """
+        log_group = logs.LogGroup.from_log_group_name(
+            self,
+            config.make_name("RateLimitDjangoLogGroup"),
+            config.make_name(config.LOG_GROUP_DJANGO),
+        )
+        namespace = f"{config.make_name()}/RateLimit"
+
+        def pattern(event):
+            return logs.FilterPattern.all(
+                logs.FilterPattern.string_value("$.logger", "=", "ocs.rate_limit"),
+                logs.FilterPattern.string_value(
+                    "$.message", "=", f"rate_limit.{event}"
+                ),
+            )
+
+        def metric_filter(id_, event, metric_name, dimensions=None):
+            logs.MetricFilter(
+                self,
+                config.make_name(id_),
+                log_group=log_group,
+                filter_pattern=pattern(event),
+                metric_namespace=namespace,
+                metric_name=metric_name,
+                metric_value="1",
+                dimensions=dimensions,
+            )
+
+        # Broken down by scope, for the dashboard. SEARCH picks up every scope
+        # the app emits, so a new scope needs no change here.
+        by_scope = {
+            "near_limit": (
+                "RateLimitNearLimit",
+                {"scope": "$.scope", "percent": "$.percent"},
+            ),
+            "would_block": ("RateLimitWouldBlock", {"scope": "$.scope"}),
+            "blocked": ("RateLimitBlocked", {"scope": "$.scope"}),
+            "backend_error": ("RateLimitBackendError", {"scope": "$.scope"}),
+        }
+        for event, (metric_name, dimensions) in by_scope.items():
+            metric_filter(f"{metric_name}Filter", event, metric_name, dimensions)
+
+        # An alarm needs a single metric, and a metric with dimensions can't be
+        # summed across them, so the alarmed events also get a total.
+        alarmed = {
+            "blocked": (
+                "RateLimitBlockedTotal",
+                "Requests are being refused with 429 by the app's rate limiter. "
+                "Check the rate-limit dashboard for the scope and Logs Insights "
+                "for the identity.",
+            ),
+            "backend_error": (
+                "RateLimitBackendErrorTotal",
+                "The rate limiter can't reach Redis. Scopes that fail open are "
+                "serving requests without a limit; scopes that fail closed are "
+                "refusing them.",
+            ),
+        }
+        for event, (metric_name, description) in alarmed.items():
+            metric_filter(f"{metric_name}Filter", event, metric_name)
+            self._alarm(
+                f"{metric_name}Alarm",
+                cloudwatch.Metric(
+                    namespace=namespace,
+                    metric_name=metric_name,
+                    statistic="Sum",
+                    period=cdk.Duration.minutes(5),
+                ),
+                # Starting point only: once enforcement is on, raise the
+                # `blocked` threshold if routine refusals make it noisy.
+                threshold=0,
+                evaluation_periods=1,
+                comparison=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+                alarm_description=description,
+                treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            )
+
+        query_string = logs.QueryString(
+            fields=[
+                "scope",
+                "identity_type",
+                "key_hash",
+                "team_id",
+                "count",
+                "limit",
+                "percent",
+            ],
+            filter_statements=[
+                'logger = "ocs.rate_limit" and message in '
+                '["rate_limit.near_limit", "rate_limit.would_block", "rate_limit.blocked"]'
+            ],
+            stats="max(count) as peak, max(limit) as lim by scope, identity_type, key_hash, team_id",
+            sort="peak desc",
+        )
+        logs.QueryDefinition(
+            self,
+            config.make_name("RateLimitBusiestIdentitiesQuery"),
+            query_definition_name=f"{config.make_name()}/rate-limit-busiest-identities",
+            query_string=query_string,
+            log_groups=[log_group],
+        )
+
+        def search_graph(title, metric_name, dimensions):
+            dims = ",".join(dimensions)
+            return cloudwatch.GraphWidget(
+                title=title,
+                width=12,
+                left=[
+                    cloudwatch.MathExpression(
+                        expression=(
+                            f"SEARCH('{{{namespace},{dims}}} "
+                            f"MetricName=\"{metric_name}\"', 'Sum', 300)"
+                        ),
+                        label="",
+                        period=cdk.Duration.minutes(5),
+                        using_metrics={},
+                    )
+                ],
+            )
+
+        dashboard = cloudwatch.Dashboard(
+            self,
+            config.make_name("RateLimitDashboard"),
+            dashboard_name=config.make_name("rate-limits"),
+        )
+        dashboard.add_widgets(
+            cloudwatch.TextWidget(
+                markdown=(
+                    "### Rate limits\n"
+                    "Counts are log lines, not requests: `would_block` and "
+                    "`blocked` log the first crossing per identity per window, "
+                    "then every 100th request. `near_limit` logs each identity "
+                    "once per window at 50% and 80% of its limit."
+                ),
+                width=24,
+                height=2,
+            )
+        )
+        dashboard.add_widgets(
+            search_graph(
+                "Near limit (by scope, percent)",
+                "RateLimitNearLimit",
+                ["scope", "percent"],
+            ),
+            search_graph("Would block (by scope)", "RateLimitWouldBlock", ["scope"]),
+        )
+        dashboard.add_widgets(
+            search_graph("Blocked (by scope)", "RateLimitBlocked", ["scope"]),
+            search_graph(
+                "Backend errors (by scope)", "RateLimitBackendError", ["scope"]
+            ),
+        )
+        dashboard.add_widgets(
+            cloudwatch.LogQueryWidget(
+                title="Busiest identities",
+                log_group_names=[log_group.log_group_name],
+                query_string=query_string.to_string(),
+                width=24,
+                height=8,
+            )
         )

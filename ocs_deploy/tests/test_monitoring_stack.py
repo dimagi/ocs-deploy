@@ -133,3 +133,65 @@ def test_redis_alarms_use_cache_cluster_id_dimension(ocs_config):
             }
         ),
     )
+
+
+def _metric_filters(template):
+    return [
+        props["Properties"]
+        for props in template.find_resources("AWS::Logs::MetricFilter").values()
+    ]
+
+
+def test_rate_limit_metric_filters_match_each_event(ocs_config):
+    template = _synth_monitoring(ocs_config)
+    filters = _metric_filters(template)
+    metrics = {f["MetricTransformations"][0]["MetricName"]: f for f in filters}
+    assert set(metrics) == {
+        "RateLimitNearLimit",
+        "RateLimitWouldBlock",
+        "RateLimitBlocked",
+        "RateLimitBackendError",
+        "RateLimitBlockedTotal",
+        "RateLimitBackendErrorTotal",
+    }
+    for f in filters:
+        assert f["LogGroupName"] == "ocs-test-DjangoLogs"
+        assert '$.logger = "ocs.rate_limit"' in f["FilterPattern"]
+        assert f["MetricTransformations"][0]["MetricNamespace"] == "ocs-test/RateLimit"
+    assert (
+        '$.message = "rate_limit.blocked"'
+        in metrics["RateLimitBlocked"]["FilterPattern"]
+    )
+    assert (
+        '$.message = "rate_limit.backend_error"'
+        in metrics["RateLimitBackendErrorTotal"]["FilterPattern"]
+    )
+
+
+def test_rate_limit_metrics_never_use_identity_dimensions(ocs_config):
+    """Per-identity dimensions would create a billed metric per identity."""
+    template = _synth_monitoring(ocs_config)
+    for f in _metric_filters(template):
+        for dimension in f["MetricTransformations"][0].get("Dimensions", []):
+            assert dimension["Key"] in {"scope", "percent"}
+
+
+def test_rate_limit_alarms_only_for_blocked_and_backend_error(ocs_config):
+    template = _synth_monitoring(ocs_config)
+    alarmed = {
+        props["Properties"].get("MetricName")
+        for props in template.find_resources("AWS::CloudWatch::Alarm").values()
+        if props["Properties"].get("Namespace") == "ocs-test/RateLimit"
+    }
+    assert alarmed == {"RateLimitBlockedTotal", "RateLimitBackendErrorTotal"}
+
+
+def test_rate_limit_dashboard_and_saved_query(ocs_config):
+    template = _synth_monitoring(ocs_config)
+    template.has_resource_properties(
+        "AWS::CloudWatch::Dashboard", {"DashboardName": "ocs-test-rate-limits"}
+    )
+    template.has_resource_properties(
+        "AWS::Logs::QueryDefinition",
+        {"LogGroupNames": ["ocs-test-DjangoLogs"]},
+    )
